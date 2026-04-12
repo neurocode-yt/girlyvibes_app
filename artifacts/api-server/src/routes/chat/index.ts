@@ -95,7 +95,7 @@ chatRouter.post("/chat", async (req, res) => {
       res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
     }
     res.end();
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Chat error:", error);
     if (!res.headersSent) {
       res.status(500).json({ error: "Chat failed" });
