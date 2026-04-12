@@ -20,6 +20,7 @@ import { AppProvider } from "@/contexts/AppContext";
 SplashScreen.preventAutoHideAsync();
 
 I18nManager.allowRTL(true);
+I18nManager.forceRTL(true);
 
 const queryClient = new QueryClient();
 
