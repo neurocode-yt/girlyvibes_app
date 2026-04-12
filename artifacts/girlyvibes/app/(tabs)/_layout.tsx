@@ -1,6 +1,6 @@
 import { BlurView } from "expo-blur";
 import { Tabs } from "expo-router";
-import { AppFeather as Feather, AppMaterialCommunityIcons as MaterialCommunityIcons } from "@/components/Icons";
+import { AppFeather as Feather, AppIonicons as Ionicons, AppMaterialCommunityIcons as MaterialCommunityIcons } from "@/components/Icons";
 import React from "react";
 import { Platform, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -22,7 +22,7 @@ export default function TabLayout() {
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.mutedForeground,
         tabBarLabelStyle: {
-          fontSize: 10,
+          fontSize: 9,
           fontFamily: "Inter_500Medium",
           marginBottom: isWeb ? 0 : 2,
         },
@@ -57,7 +57,7 @@ export default function TabLayout() {
         options={{
           title: t.tabs.home,
           tabBarIcon: ({ color }) => (
-            <Feather name="home" size={22} color={color} />
+            <Feather name="home" size={21} color={color} />
           ),
         }}
       />
@@ -66,7 +66,7 @@ export default function TabLayout() {
         options={{
           title: t.tabs.routines,
           tabBarIcon: ({ color }) => (
-            <MaterialCommunityIcons name="checkbox-marked-circle-outline" size={22} color={color} />
+            <MaterialCommunityIcons name="checkbox-marked-circle-outline" size={21} color={color} />
           ),
         }}
       />
@@ -75,7 +75,7 @@ export default function TabLayout() {
         options={{
           title: t.tabs.glowup,
           tabBarIcon: ({ color }) => (
-            <MaterialCommunityIcons name="star-outline" size={22} color={color} />
+            <MaterialCommunityIcons name="star-outline" size={21} color={color} />
           ),
         }}
       />
@@ -84,7 +84,16 @@ export default function TabLayout() {
         options={{
           title: t.tabs.advice,
           tabBarIcon: ({ color }) => (
-            <Feather name="heart" size={21} color={color} />
+            <Feather name="heart" size={20} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="chat"
+        options={{
+          title: t.chat.screenTitle,
+          tabBarIcon: ({ color }) => (
+            <Ionicons name="chatbubble-ellipses-outline" size={21} color={color} />
           ),
         }}
       />
@@ -93,7 +102,7 @@ export default function TabLayout() {
         options={{
           title: t.tabs.boredom,
           tabBarIcon: ({ color }) => (
-            <MaterialCommunityIcons name="dice-5-outline" size={22} color={color} />
+            <MaterialCommunityIcons name="dice-5-outline" size={21} color={color} />
           ),
         }}
       />

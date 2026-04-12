@@ -79,6 +79,14 @@ export const AR = {
   adviceDetail: {
     read: "دقيقة قراءة",
   },
+  chat: {
+    screenTitle: "دردشة",
+    screenSubtitle: "اسألي Girly Vibes أي شيء 💖",
+    placeholder: "اكتبي رسالتك...",
+    welcome: "أهلاً حبيبتي! 🌸 أنا Girly Vibes، صديقتك الرقمية ✨\n\nاسأليني عن أي شيء:\n💖 نصائح للعناية بالبشرة\n📚 نصائح للدراسة\n💪 بناء الثقة بالنفس\n🌸 الروتين اليومي\n✨ نصائح الجمال والأناقة",
+    errorMessage: "عذراً حبيبتي، حصل خطأ. حاولي مرة ثانية 🌸",
+    thinking: "تكتب...",
+  },
   language: {
     switchTo: "English",
     current: "العربية",
@@ -163,6 +171,14 @@ export const EN = {
   },
   adviceDetail: {
     read: "min read",
+  },
+  chat: {
+    screenTitle: "Chat",
+    screenSubtitle: "Ask Girly Vibes anything 💖",
+    placeholder: "Type your message...",
+    welcome: "Hey bestie! 🌸 I'm Girly Vibes, your digital BFF ✨\n\nAsk me about anything:\n💖 Skincare tips\n📚 Study hacks\n💪 Building confidence\n🌸 Daily routines\n✨ Beauty & style tips",
+    errorMessage: "Oops bestie, something went wrong. Try again 🌸",
+    thinking: "typing...",
   },
   language: {
     switchTo: "العربية",

@@ -9,18 +9,18 @@ import pRetry from "p-retry";
  *
  * USAGE:
  * ```typescript
- * import { batchProcess } from "@workspace/integrations-openai-ai-server/batch";
- * import { openai } from "@workspace/integrations-openai-ai-server";
+ * import { batchProcess } from "@workspace/integrations-gemini-ai/batch";
+ * import { ai } from "@workspace/integrations-gemini-ai";
  *
  * const results = await batchProcess(
  *   artworks,
  *   async (artwork) => {
- *     const response = await openai.chat.completions.create({
- *       model: "gpt-5.2",
- *       messages: [{ role: "user", content: `Categorize: ${artwork.name}` }],
- *       response_format: { type: "json_object" },
+ *     const response = await ai.models.generateContent({
+ *       model: "gemini-2.5-flash",
+ *       contents: [{ role: "user", parts: [{ text: `Categorize: ${artwork.name}` }] }],
+ *       config: { responseMimeType: "application/json" },
  *     });
- *     return JSON.parse(response.choices[0]?.message?.content || "{}");
+ *     return JSON.parse(response.text ?? "{}");
  *   },
  *   { concurrency: 2, retries: 5 }
  * );
