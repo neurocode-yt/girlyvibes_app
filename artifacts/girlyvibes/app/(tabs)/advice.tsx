@@ -17,12 +17,13 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useApp } from "@/contexts/AppContext";
 import { ADVICE_CATEGORIES, type AdviceCard } from "@/data/advice";
 import { useColors } from "@/hooks/useColors";
-import { AR } from "@/constants/i18n";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 function AdviceCardItem({ card }: { card: AdviceCard }) {
   const colors = useColors();
   const router = useRouter();
   const { isFavorite, toggleFavoriteAdvice } = useApp();
+  const { l } = useLanguage();
 
   const fav = isFavorite(card.id);
   const category = ADVICE_CATEGORIES.find((c) => c.id === card.category);
@@ -43,7 +44,7 @@ function AdviceCardItem({ card }: { card: AdviceCard }) {
           style={[styles.catPill, { backgroundColor: category?.color ?? colors.highlight }]}
         >
           <Text style={[styles.catPillText, { color: colors.primary }]}>
-            {category?.title}
+            {category ? l(category.title, category.titleEn) : ""}
           </Text>
         </View>
         <Pressable
@@ -62,15 +63,15 @@ function AdviceCardItem({ card }: { card: AdviceCard }) {
         </Pressable>
       </View>
       <Text style={[styles.cardTitle, { color: colors.foreground }]}>
-        {card.title}
+        {l(card.title, card.titleEn)}
       </Text>
       <Text style={[styles.cardPreview, { color: colors.mutedForeground }]}>
-        {card.preview}
+        {l(card.preview, card.previewEn)}
       </Text>
       <View style={styles.readRow}>
         <Ionicons name="time-outline" size={12} color={colors.mutedForeground} />
         <Text style={[styles.readTime, { color: colors.mutedForeground }]}>
-          {card.readTime}
+          {l(card.readTime, card.readTimeEn)}
         </Text>
       </View>
     </Pressable>
@@ -80,6 +81,7 @@ function AdviceCardItem({ card }: { card: AdviceCard }) {
 export default function AdviceScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const { t, l } = useLanguage();
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
 
   const topInset = Platform.OS === "web" ? 67 : insets.top;
@@ -97,10 +99,10 @@ export default function AdviceScreen() {
         style={[styles.header, { paddingTop: topInset + 16 }]}
       >
         <Text style={[styles.headerTitle, { color: colors.foreground }]}>
-          {AR.advice.screenTitle}
+          {t.advice.screenTitle}
         </Text>
         <Text style={[styles.headerSub, { color: colors.mutedForeground }]}>
-          {AR.advice.screenSubtitle}
+          {t.advice.screenSubtitle}
         </Text>
 
         {/* Category Pills */}
@@ -130,7 +132,7 @@ export default function AdviceScreen() {
                 },
               ]}
             >
-              {AR.advice.all}
+              {t.advice.all}
             </Text>
           </Pressable>
           {ADVICE_CATEGORIES.map((cat) => (
@@ -155,7 +157,7 @@ export default function AdviceScreen() {
                   },
                 ]}
               >
-                {cat.title}
+                {l(cat.title, cat.titleEn)}
               </Text>
             </Pressable>
           ))}

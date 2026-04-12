@@ -15,7 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useApp } from "@/contexts/AppContext";
 import { GLOW_UP_PLANS, type GlowUpPlan } from "@/data/glowupPlans";
 import { useColors } from "@/hooks/useColors";
-import { AR } from "@/constants/i18n";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 function PlanCard({
   plan,
@@ -31,6 +31,7 @@ function PlanCard({
   isExpanded: boolean;
 }) {
   const colors = useColors();
+  const { t, l } = useLanguage();
   const { isGlowUpTaskDone, toggleGlowUpTask, getCurrentDay } = useApp();
 
   const currentDay = getCurrentDay();
@@ -66,18 +67,18 @@ function PlanCard({
         <View style={styles.planCardTop}>
           <View>
             <Text style={[styles.planDuration, { color: "#fff" }]}>
-              {plan.duration} {AR.glowup.days}
+              {plan.duration} {t.glowup.days}
             </Text>
             <Text style={[styles.planTitle, { color: "#fff" }]}>
-              {plan.title}
+              {l(plan.title, plan.titleEn)}
             </Text>
             <Text style={[styles.planTagline, { color: "rgba(255,255,255,0.85)" }]}>
-              {plan.tagline}
+              {l(plan.tagline, plan.taglineEn)}
             </Text>
           </View>
           {isActive && (
             <View style={styles.activeBadge}>
-              <Text style={styles.activeBadgeText}>{AR.glowup.activeBadge}</Text>
+              <Text style={styles.activeBadgeText}>{t.glowup.activeBadge}</Text>
             </View>
           )}
         </View>
@@ -86,7 +87,7 @@ function PlanCard({
           <View style={styles.planProgress}>
             <View style={styles.progressRow}>
               <Text style={{ color: "#fff", fontFamily: "Inter_500Medium", fontSize: 13 }}>
-                {totalTasksDone} / {totalTasks} {AR.glowup.tasks}
+                {totalTasksDone} / {totalTasks} {t.glowup.tasks}
               </Text>
               <Text style={{ color: "#fff", fontFamily: "Inter_700Bold", fontSize: 13 }}>
                 {progressPercent}%
@@ -110,7 +111,7 @@ function PlanCard({
             style={[styles.startBtn, { backgroundColor: colors.primary }]}
             onPress={onStart}
           >
-            <Text style={styles.startBtnText}>{AR.glowup.startPlan}</Text>
+            <Text style={styles.startBtnText}>{t.glowup.startPlan}</Text>
           </Pressable>
         ) : (
           <Pressable
@@ -118,7 +119,7 @@ function PlanCard({
             style={[styles.expandBtn, { borderColor: colors.border }]}
           >
             <Text style={[styles.expandBtnText, { color: colors.foreground }]}>
-              {isExpanded ? AR.glowup.hideDays : AR.glowup.viewTasks}
+              {isExpanded ? t.glowup.hideDays : t.glowup.viewTasks}
             </Text>
             <Ionicons
               name={isExpanded ? "chevron-up" : "chevron-down"}
@@ -159,7 +160,7 @@ function PlanCard({
                           },
                         ]}
                       >
-                        {AR.glowup.today} {d.day}
+                        {t.glowup.today} {d.day}
                       </Text>
                       {isToday && (
                         <View
@@ -168,14 +169,14 @@ function PlanCard({
                             { backgroundColor: colors.primary },
                           ]}
                         >
-                          <Text style={styles.todayPillText}>{AR.glowup.today}</Text>
+                          <Text style={styles.todayPillText}>{t.glowup.today}</Text>
                         </View>
                       )}
                     </View>
                     <Text
                       style={[styles.dayTheme, { color: colors.foreground }]}
                     >
-                      {d.theme}
+                      {l(d.theme, d.themeEn)}
                     </Text>
                   </View>
 
@@ -228,7 +229,7 @@ function PlanCard({
                               },
                             ]}
                           >
-                            {task.title}
+                            {l(task.title, task.titleEn)}
                           </Text>
                           <Text
                             style={[
@@ -236,7 +237,7 @@ function PlanCard({
                               { color: colors.mutedForeground },
                             ]}
                           >
-                            {task.category}
+                            {l(task.category, task.categoryEn)}
                           </Text>
                         </View>
                       </Pressable>
@@ -245,7 +246,7 @@ function PlanCard({
                   <Text
                     style={[styles.dayProgress, { color: colors.mutedForeground }]}
                   >
-                    {dayDone} / {d.tasks.length} {AR.glowup.completed}
+                    {dayDone} / {d.tasks.length} {t.glowup.completed}
                   </Text>
                 </View>
               );
@@ -261,6 +262,7 @@ export default function GlowUpScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { data, startGlowUpPlan } = useApp();
+  useLanguage();
   const [expandedPlanId, setExpandedPlanId] = useState<string | null>(null);
 
   const topInset = Platform.OS === "web" ? 67 : insets.top;
@@ -284,10 +286,10 @@ export default function GlowUpScreen() {
         style={[styles.header, { paddingTop: topInset + 16 }]}
       >
         <Text style={[styles.headerTitle, { color: colors.foreground }]}>
-          {AR.glowup.screenTitle}
+          {t.glowup.screenTitle}
         </Text>
         <Text style={[styles.headerSub, { color: colors.mutedForeground }]}>
-          {AR.glowup.screenSubtitle}
+          {t.glowup.screenSubtitle}
         </Text>
       </LinearGradient>
 

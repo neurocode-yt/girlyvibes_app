@@ -4,7 +4,6 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import React, { useMemo } from "react";
 import {
-  I18nManager,
   Platform,
   Pressable,
   ScrollView,
@@ -17,27 +16,39 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useApp } from "@/contexts/AppContext";
 import { ADVICE_CATEGORIES } from "@/data/advice";
 import { ROUTINE_TEMPLATES } from "@/data/routines";
-import { AR } from "@/constants/i18n";
 import { useColors } from "@/hooks/useColors";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { Translations } from "@/constants/i18n";
 
-function getGreeting() {
+function getGreeting(t: Translations) {
   const hour = new Date().getHours();
-  if (hour < 12) return AR.home.greetingMorning;
-  if (hour < 17) return AR.home.greetingAfternoon;
-  return AR.home.greetingEvening;
+  if (hour < 12) return t.home.greetingMorning;
+  if (hour < 17) return t.home.greetingAfternoon;
+  return t.home.greetingEvening;
 }
 
-function getTip() {
-  const tips = [
-    "الاتساق أقوى من الكمال. كوني حاضرة لنفسك كل يوم.",
-    "ابدئي بخطوات صغيرة. عادة صحية واحدة أفضل من صفر عادات مثالية.",
-    "قيمتك لا تُقاس بإنتاجيتك أو مظهرك.",
-    "كل يوم تعتنين فيه بنفسك هو يوم تستثمرين فيه في مستقبلك.",
-    "الراحة ليست كسلاً. جسمك يحتاج الراحة لينمو ويتألق.",
-    "أنتِ بالضبط من تحتاجين أن تكوني الآن، وأنتِ تصبحين أفضل.",
-    "اشربي ماء. اغسلي وجهك. كوني لطيفة مع نفسك. كرري.",
-    "خطوات صغيرة في الاتجاه الصحيح لا تزال خطوات إلى الأمام.",
-  ];
+const AR_TIPS = [
+  "الاتساق أقوى من الكمال. كوني حاضرة لنفسك كل يوم.",
+  "ابدئي بخطوات صغيرة. عادة صحية واحدة أفضل من صفر عادات مثالية.",
+  "قيمتك لا تُقاس بإنتاجيتك أو مظهرك.",
+  "كل يوم تعتنين فيه بنفسك هو يوم تستثمرين فيه في مستقبلك.",
+  "الراحة ليست كسلاً. جسمك يحتاج الراحة لينمو ويتألق.",
+  "أنتِ بالضبط من تحتاجين أن تكوني الآن، وأنتِ تصبحين أفضل.",
+  "اشربي ماء. اغسلي وجهك. كوني لطيفة مع نفسك. كرري.",
+  "خطوات صغيرة في الاتجاه الصحيح لا تزال خطوات إلى الأمام.",
+];
+const EN_TIPS = [
+  "Consistency beats perfection. Show up for yourself every day.",
+  "Start small. One healthy habit beats zero perfect ones.",
+  "Your worth isn't measured by productivity or appearance.",
+  "Every day you care for yourself is a day you invest in your future.",
+  "Rest isn't laziness. Your body needs it to grow and glow.",
+  "You're exactly who you need to be right now, and you're becoming better.",
+  "Drink water. Wash your face. Be kind to yourself. Repeat.",
+  "Small steps in the right direction are still steps forward.",
+];
+function getTip(lang: string) {
+  const tips = lang === "ar" ? AR_TIPS : EN_TIPS;
   const today = new Date().getDay();
   return tips[today % tips.length];
 }
@@ -47,9 +58,10 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { data, getRoutineCompletionPercent } = useApp();
+  const { t, l, lang, isRTL } = useLanguage();
 
-  const greeting = getGreeting();
-  const dailyTip = getTip();
+  const greeting = getGreeting(t);
+  const dailyTip = getTip(lang);
 
   const topRoutine = useMemo(() => {
     return ROUTINE_TEMPLATES[0];
@@ -67,7 +79,6 @@ export default function HomeScreen() {
   }, []);
 
   const topInset = Platform.OS === "web" ? 67 : insets.top;
-  const isRTL = I18nManager.isRTL;
 
   return (
     <ScrollView
@@ -125,7 +136,7 @@ export default function HomeScreen() {
               color={colors.primary}
             />
             <Text style={[styles.tipLabel, { color: colors.primary }]}>
-              {AR.home.todayReminder}
+              {t.home.todayReminder}
             </Text>
           </View>
           <Text style={[styles.tipText, { color: colors.foreground }]}>
@@ -150,7 +161,7 @@ export default function HomeScreen() {
               {data.streak}
             </Text>
             <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>
-              {AR.home.dayStreak}
+              {t.home.dayStreak}
             </Text>
           </View>
           <View
@@ -168,7 +179,7 @@ export default function HomeScreen() {
               {data.totalRoutinesCompleted}
             </Text>
             <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>
-              {AR.home.routinesDone}
+              {t.home.routinesDone}
             </Text>
           </View>
           <View
@@ -186,14 +197,14 @@ export default function HomeScreen() {
               {data.favoriteAdvice.length}
             </Text>
             <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>
-              {AR.home.savedReads}
+              {t.home.savedReads}
             </Text>
           </View>
         </View>
 
         {/* Today's Routine Quick Check */}
         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
-          {AR.home.morningRoutineSection}
+          {t.home.morningRoutineSection}
         </Text>
         <Pressable
           style={[
@@ -210,7 +221,7 @@ export default function HomeScreen() {
               <Text
                 style={[styles.routineCardTitle, { color: colors.foreground }]}
               >
-                {topRoutine.title}
+                {l(topRoutine.title, topRoutine.titleEn)}
               </Text>
               <Text
                 style={[
@@ -218,7 +229,7 @@ export default function HomeScreen() {
                   { color: colors.mutedForeground },
                 ]}
               >
-                {topRoutine.steps.length} خطوة
+                {topRoutine.steps.length} {l("خطوة", "steps")}
               </Text>
             </View>
             <View style={styles.progressCircle}>
@@ -243,7 +254,7 @@ export default function HomeScreen() {
             />
           </View>
           <Text style={[styles.tapHint, { color: colors.mutedForeground }]}>
-            {AR.home.tapToContinue}
+            {t.home.tapToContinue}
           </Text>
         </Pressable>
 
@@ -251,7 +262,7 @@ export default function HomeScreen() {
         {data.glowUpProgress.activePlanId && (
           <>
             <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
-              {AR.home.activeplan}
+              {t.home.activeplan}
             </Text>
             <Pressable
               style={[
@@ -270,10 +281,10 @@ export default function HomeScreen() {
               />
               <View style={{ flex: 1, marginHorizontal: 12 }}>
                 <Text style={styles.planBannerTitle}>
-                  أنتِ في خطة جلو أب! ✨
+                  {l("أنتِ في خطة جلو أب! ✨", "You're on a Glow Up plan! ✨")}
                 </Text>
                 <Text style={styles.planBannerSub}>
-                  استمري — أنتِ رائعة
+                  {l("استمري — أنتِ رائعة", "Keep going — you're amazing")}
                 </Text>
               </View>
               <MaterialCommunityIcons
@@ -287,7 +298,7 @@ export default function HomeScreen() {
 
         {/* Featured Advice */}
         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
-          {AR.home.readOfDay}
+          {t.home.readOfDay}
         </Text>
         <Pressable
           style={[
@@ -309,26 +320,26 @@ export default function HomeScreen() {
             ]}
           >
             <Text style={[styles.advicePillText, { color: colors.primary }]}>
-              {
-                ADVICE_CATEGORIES.find((c) => c.id === featuredAdvice.category)
-                  ?.title
-              }
+              {(() => {
+                const cat = ADVICE_CATEGORIES.find((c) => c.id === featuredAdvice.category);
+                return cat ? l(cat.title, cat.titleEn) : "";
+              })()}
             </Text>
           </View>
           <Text style={[styles.adviceTitle, { color: colors.foreground }]}>
-            {featuredAdvice.title}
+            {l(featuredAdvice.title, featuredAdvice.titleEn)}
           </Text>
           <Text style={[styles.advicePreview, { color: colors.mutedForeground }]}>
-            {featuredAdvice.preview}
+            {l(featuredAdvice.preview, featuredAdvice.previewEn)}
           </Text>
           <View style={styles.readMoreRow}>
             <Text style={[styles.readMore, { color: colors.primary }]}>
-              اقرئي المزيد
+              {l("اقرئي المزيد", "Read more")}
             </Text>
             <Text
               style={[styles.readTime, { color: colors.mutedForeground }]}
             >
-              · {featuredAdvice.readTime}
+              · {l(featuredAdvice.readTime, featuredAdvice.readTimeEn)}
             </Text>
           </View>
         </Pressable>

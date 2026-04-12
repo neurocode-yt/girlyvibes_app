@@ -16,10 +16,11 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useApp } from "@/contexts/AppContext";
 import { ACTIVITIES, DETOX_CHALLENGES, type Activity } from "@/data/boredom";
 import { useColors } from "@/hooks/useColors";
-import { AR } from "@/constants/i18n";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 function ActivityGrid({ highlighted }: { highlighted: string | null }) {
   const colors = useColors();
+  const { l } = useLanguage();
 
   return (
     <View style={styles.grid}>
@@ -51,7 +52,7 @@ function ActivityGrid({ highlighted }: { highlighted: string | null }) {
               ]}
               numberOfLines={2}
             >
-              {activity.title}
+              {l(activity.title, activity.titleEn)}
             </Text>
             <Text
               style={[
@@ -63,7 +64,7 @@ function ActivityGrid({ highlighted }: { highlighted: string | null }) {
                 },
               ]}
             >
-              {activity.duration}
+              {l(activity.duration, activity.durationEn)}
             </Text>
           </View>
         );
@@ -74,6 +75,7 @@ function ActivityGrid({ highlighted }: { highlighted: string | null }) {
 
 function DetoxSection() {
   const colors = useColors();
+  const { t, l } = useLanguage();
   const {
     data,
     startDetoxChallenge,
@@ -93,10 +95,10 @@ function DetoxSection() {
     return (
       <View style={styles.detoxSection}>
         <Text style={[styles.detoxTitle, { color: colors.foreground }]}>
-          {AR.boredom.detoxTitle}
+          {t.boredom.detoxTitle}
         </Text>
         <Text style={[styles.detoxSub, { color: colors.mutedForeground }]}>
-          {AR.boredom.detoxSub}
+          {t.boredom.detoxSub}
         </Text>
         <View style={styles.challengeCards}>
           {DETOX_CHALLENGES.map((ch) => (
@@ -123,15 +125,15 @@ function DetoxSection() {
                   {ch.days}
                 </Text>
                 <Text style={[styles.challengeDayText, { color: colors.primary }]}>
-                  {AR.boredom.days}
+                  {t.boredom.days}
                 </Text>
               </View>
               <View style={{ flex: 1, marginLeft: 12 }}>
                 <Text style={[styles.challengeName, { color: colors.foreground }]}>
-                  {ch.title}
+                  {l(ch.title, ch.titleEn)}
                 </Text>
                 <Text style={[styles.challengeDesc, { color: colors.mutedForeground }]}>
-                  {ch.description}
+                  {l(ch.description, ch.descriptionEn)}
                 </Text>
               </View>
             </Pressable>
@@ -147,7 +149,7 @@ function DetoxSection() {
   return (
     <View style={styles.detoxSection}>
       <Text style={[styles.detoxTitle, { color: colors.foreground }]}>
-        {activeChallenge.title}
+        {l(activeChallenge.title, activeChallenge.titleEn)}
       </Text>
 
       <View
@@ -158,7 +160,7 @@ function DetoxSection() {
       >
         <View style={styles.challengeProgress}>
           <Text style={[styles.challengeProgressText, { color: colors.foreground }]}>
-            {AR.boredom.dayOf} {daysCompleted} {AR.boredom.of} {totalDays}
+            {t.boredom.dayOf} {daysCompleted} {t.boredom.of} {totalDays}
           </Text>
           <Text style={[styles.challengeProgressNum, { color: colors.primary }]}>
             {Math.round(progress * 100)}%
@@ -177,7 +179,7 @@ function DetoxSection() {
         </View>
 
         <View style={styles.challengeRules}>
-          {activeChallenge.rules.map((rule, i) => (
+          {(l("ar", "en") === "ar" ? activeChallenge.rules : activeChallenge.rulesEn).map((rule, i) => (
             <View key={i} style={styles.ruleRow}>
               <View
                 style={[styles.ruleDot, { backgroundColor: colors.primary }]}
@@ -200,7 +202,7 @@ function DetoxSection() {
             }}
           >
             <MaterialCommunityIcons name="check-circle" size={18} color="#fff" />
-            <Text style={styles.checkInBtnText}>{AR.boredom.checkIn}</Text>
+            <Text style={styles.checkInBtnText}>{t.boredom.checkIn}</Text>
           </Pressable>
         ) : (
           <View
@@ -212,7 +214,7 @@ function DetoxSection() {
               color={colors.success}
             />
             <Text style={[styles.checkedInText, { color: colors.successForeground }]}>
-              {AR.boredom.checkedIn}
+              {t.boredom.checkedIn}
             </Text>
           </View>
         )}
@@ -224,6 +226,7 @@ function DetoxSection() {
 export default function BoredomScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const { t, l } = useLanguage();
   const [highlighted, setHighlighted] = useState<string | null>(null);
   const spinAnim = useRef(new Animated.Value(0)).current;
 
@@ -267,10 +270,10 @@ export default function BoredomScreen() {
         style={[styles.header, { paddingTop: topInset + 16 }]}
       >
         <Text style={[styles.headerTitle, { color: colors.foreground }]}>
-          {AR.boredom.screenTitle}
+          {t.boredom.screenTitle}
         </Text>
         <Text style={[styles.headerSub, { color: colors.mutedForeground }]}>
-          {AR.boredom.screenSubtitle}
+          {t.boredom.screenSubtitle}
         </Text>
 
         <Pressable
@@ -280,7 +283,7 @@ export default function BoredomScreen() {
           <Animated.View style={{ transform: [{ rotate: spin }] }}>
             <MaterialCommunityIcons name="dice-5-outline" size={22} color="#fff" />
           </Animated.View>
-          <Text style={styles.surpriseBtnText}>{AR.boredom.surpriseMe}</Text>
+          <Text style={styles.surpriseBtnText}>{t.boredom.surpriseMe}</Text>
         </Pressable>
 
         {highlighted && (
@@ -296,9 +299,9 @@ export default function BoredomScreen() {
               color={colors.primary}
             />
             <Text style={[styles.highlightText, { color: colors.primary }]}>
-              {AR.boredom.try}{" "}
+              {t.boredom.try}{" "}
               <Text style={{ fontFamily: "Inter_600SemiBold" }}>
-                {ACTIVITIES.find((a) => a.id === highlighted)?.title}
+                {(() => { const a = ACTIVITIES.find((a) => a.id === highlighted); return a ? l(a.title, a.titleEn) : ""; })()}
               </Text>
             </Text>
           </View>
@@ -307,7 +310,7 @@ export default function BoredomScreen() {
 
       <View style={styles.content}>
         <Text style={[styles.sectionLabel, { color: colors.foreground }]}>
-          {AR.boredom.offlineIdeas}
+          {t.boredom.offlineIdeas}
         </Text>
         <ActivityGrid highlighted={highlighted} />
 

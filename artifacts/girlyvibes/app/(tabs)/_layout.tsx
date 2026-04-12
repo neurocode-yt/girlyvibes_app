@@ -6,11 +6,12 @@ import { Platform, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useColors } from "@/hooks/useColors";
-import { AR } from "@/constants/i18n";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 export default function TabLayout() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const { t } = useLanguage();
   const isIOS = Platform.OS === "ios";
   const isWeb = Platform.OS === "web";
 
@@ -54,7 +55,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: AR.tabs.home,
+          title: t.tabs.home,
           tabBarIcon: ({ color }) => (
             <Feather name="home" size={22} color={color} />
           ),
@@ -63,7 +64,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="routines"
         options={{
-          title: AR.tabs.routines,
+          title: t.tabs.routines,
           tabBarIcon: ({ color }) => (
             <MaterialCommunityIcons name="checkbox-marked-circle-outline" size={22} color={color} />
           ),
@@ -72,7 +73,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="glowup"
         options={{
-          title: AR.tabs.glowup,
+          title: t.tabs.glowup,
           tabBarIcon: ({ color }) => (
             <MaterialCommunityIcons name="star-outline" size={22} color={color} />
           ),
@@ -81,7 +82,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="advice"
         options={{
-          title: AR.tabs.advice,
+          title: t.tabs.advice,
           tabBarIcon: ({ color }) => (
             <Feather name="heart" size={21} color={color} />
           ),
@@ -90,7 +91,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="boredom"
         options={{
-          title: AR.tabs.boredom,
+          title: t.tabs.boredom,
           tabBarIcon: ({ color }) => (
             <MaterialCommunityIcons name="dice-5-outline" size={22} color={color} />
           ),

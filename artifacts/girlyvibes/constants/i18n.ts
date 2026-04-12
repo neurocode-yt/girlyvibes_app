@@ -1,3 +1,5 @@
+export type Lang = "ar" | "en";
+
 export const AR = {
   tabs: {
     home: "الرئيسية",
@@ -77,4 +79,95 @@ export const AR = {
   adviceDetail: {
     read: "دقيقة قراءة",
   },
+  language: {
+    switchTo: "English",
+    current: "العربية",
+  },
 };
+
+export const EN = {
+  tabs: {
+    home: "Home",
+    routines: "Routines",
+    glowup: "Glow Up",
+    advice: "Advice",
+    boredom: "Activities",
+  },
+  home: {
+    greetingMorning: "Good morning ✦",
+    greetingAfternoon: "Good afternoon ✦",
+    greetingEvening: "Good evening ✦",
+    brandName: "Girly Vibes",
+    todayReminder: "Today's Reminder",
+    dayStreak: "Day Streak",
+    routinesDone: "Routines Done",
+    savedReads: "Saved Reads",
+    morningRoutineSection: "Morning Routine",
+    tapToContinue: "Tap to continue →",
+    readOfDay: "Read of the Day",
+    startYourJourney: "Start your journey ✨",
+    activeplan: "Active Plan",
+  },
+  routines: {
+    screenTitle: "My Routines",
+    screenSubtitle: "Build habits that last",
+    markComplete: "Mark Complete ✓",
+  },
+  glowup: {
+    screenTitle: "Glow Up Plans",
+    screenSubtitle: "Choose your transformation journey",
+    days: "days",
+    activeBadge: "Active",
+    startPlan: "Start This Plan",
+    viewTasks: "View Day Tasks",
+    hideDays: "Hide Days",
+    today: "Day",
+    completed: "done",
+    tasks: "tasks",
+  },
+  advice: {
+    screenTitle: "Advice Library",
+    screenSubtitle: "Real tips from your big sister",
+    all: "All",
+    read: "min read",
+  },
+  boredom: {
+    screenTitle: "Beat Boredom",
+    screenSubtitle: "Put the phone down. Try something real.",
+    surpriseMe: "Surprise Me",
+    try: "Try:",
+    offlineIdeas: "30 Offline Ideas",
+    detoxTitle: "Phone Detox Challenge",
+    detoxSub: "Pick a challenge and reclaim your time",
+    days: "days",
+    dayOf: "Day",
+    of: "of",
+    checkIn: "Check In Today",
+    checkedIn: "Checked in today! 🌸",
+  },
+  profile: {
+    screenTitle: "My Progress",
+    profileName: "Glow Up Journey",
+    dayStreak: "Day Streak",
+    yourStats: "Your Stats",
+    statStreak: "Day Streak",
+    statRoutines: "Routines Done",
+    statSaved: "Saved Reads",
+    statDetox: "Detox Days",
+    activePlan: "Active Glow Up Plan",
+    of: "of",
+    tasksComplete: "tasks complete",
+    dayPlan: "Day Plan",
+    noPlan: "No active plan — start one from the Glow Up tab",
+    routineProgress: "Routine Progress",
+  },
+  adviceDetail: {
+    read: "min read",
+  },
+  language: {
+    switchTo: "العربية",
+    current: "English",
+  },
+};
+
+export type Translations = typeof AR;

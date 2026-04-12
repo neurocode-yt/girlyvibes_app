@@ -15,7 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useApp } from "@/contexts/AppContext";
 import { ROUTINE_TEMPLATES, type RoutineTemplate } from "@/data/routines";
 import { useColors } from "@/hooks/useColors";
-import { AR } from "@/constants/i18n";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 function RoutineCard({
   routine,
@@ -27,6 +27,7 @@ function RoutineCard({
   onToggle: () => void;
 }) {
   const colors = useColors();
+  const { t, l } = useLanguage();
   const { isStepCompleted, toggleRoutineStep, getRoutineCompletionPercent, completeRoutine } =
     useApp();
 
@@ -60,10 +61,10 @@ function RoutineCard({
         </View>
         <View style={{ flex: 1, marginLeft: 12 }}>
           <Text style={[styles.cardTitle, { color: colors.foreground }]}>
-            {routine.title}
+            {l(routine.title, routine.titleEn)}
           </Text>
           <Text style={[styles.cardSub, { color: colors.mutedForeground }]}>
-            {routine.subtitle}
+            {l(routine.subtitle, routine.subtitleEn)}
           </Text>
         </View>
         <View style={styles.cardRight}>
@@ -123,7 +124,7 @@ function RoutineCard({
                       },
                     ]}
                   >
-                    {step.title}
+                    {l(step.title, step.titleEn)}
                   </Text>
                   {step.subtitle && (
                     <Text
@@ -132,7 +133,7 @@ function RoutineCard({
                         { color: colors.mutedForeground },
                       ]}
                     >
-                      {step.subtitle}
+                      {l(step.subtitle, step.subtitleEn ?? "")}
                     </Text>
                   )}
                 </View>
@@ -146,7 +147,7 @@ function RoutineCard({
               onPress={handleComplete}
             >
               <MaterialCommunityIcons name="check-circle" size={18} color="#fff" />
-              <Text style={styles.completeBtnText}>{AR.routines.markComplete}</Text>
+              <Text style={styles.completeBtnText}>{t.routines.markComplete}</Text>
             </Pressable>
           )}
         </View>
@@ -158,6 +159,7 @@ function RoutineCard({
 export default function RoutinesScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const { t } = useLanguage();
   const [expandedId, setExpandedId] = useState<string | null>("morning");
 
   const topInset = Platform.OS === "web" ? 67 : insets.top;
@@ -175,10 +177,10 @@ export default function RoutinesScreen() {
         style={[styles.header, { paddingTop: topInset + 16 }]}
       >
         <Text style={[styles.headerTitle, { color: colors.foreground }]}>
-          {AR.routines.screenTitle}
+          {t.routines.screenTitle}
         </Text>
         <Text style={[styles.headerSub, { color: colors.mutedForeground }]}>
-          {AR.routines.screenSubtitle}
+          {t.routines.screenSubtitle}
         </Text>
       </LinearGradient>
 

@@ -3,7 +3,6 @@ import * as Haptics from "expo-haptics";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React from "react";
 import {
-  I18nManager,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -15,6 +14,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useApp } from "@/contexts/AppContext";
 import { ADVICE_CATEGORIES } from "@/data/advice";
 import { useColors } from "@/hooks/useColors";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 export default function AdviceDetailScreen() {
   const colors = useColors();
@@ -22,6 +22,7 @@ export default function AdviceDetailScreen() {
   const router = useRouter();
   const { cardId } = useLocalSearchParams<{ cardId: string }>();
   const { isFavorite, toggleFavoriteAdvice } = useApp();
+  const { l, isRTL } = useLanguage();
 
   const allCards = ADVICE_CATEGORIES.flatMap((c) => c.cards);
   const card = allCards.find((c) => c.id === cardId);
@@ -38,7 +39,6 @@ export default function AdviceDetailScreen() {
   }
 
   const fav = isFavorite(card.id);
-  const isRTL = I18nManager.isRTL;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -64,7 +64,7 @@ export default function AdviceDetailScreen() {
           style={[styles.catBadge, { backgroundColor: category?.color ?? colors.highlight }]}
         >
           <Text style={[styles.catBadgeText, { color: colors.primary }]}>
-            {category?.title}
+            {category ? l(category.title, category.titleEn) : ""}
           </Text>
         </View>
         <Pressable
@@ -90,7 +90,7 @@ export default function AdviceDetailScreen() {
         showsVerticalScrollIndicator={false}
       >
         <Text style={[styles.title, { color: colors.foreground }]}>
-          {card.title}
+          {l(card.title, card.titleEn)}
         </Text>
         <View style={styles.metaRow}>
           <MaterialCommunityIcons
@@ -99,14 +99,14 @@ export default function AdviceDetailScreen() {
             color={colors.mutedForeground}
           />
           <Text style={[styles.readTime, { color: colors.mutedForeground }]}>
-            {card.readTime}
+            {l(card.readTime, card.readTimeEn)}
           </Text>
         </View>
         <View
           style={[styles.divider, { backgroundColor: colors.border }]}
         />
         <Text style={[styles.body, { color: colors.foreground }]}>
-          {card.content}
+          {l(card.content, card.contentEn)}
         </Text>
 
         <View
@@ -118,7 +118,7 @@ export default function AdviceDetailScreen() {
             color={colors.primary}
           />
           <Text style={[styles.quoteText, { color: colors.foreground }]}>
-            {card.preview}
+            {l(card.preview, card.previewEn)}
           </Text>
         </View>
       </ScrollView>

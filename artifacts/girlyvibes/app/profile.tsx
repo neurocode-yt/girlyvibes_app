@@ -3,7 +3,6 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import React from "react";
 import {
-  I18nManager,
   Platform,
   Pressable,
   ScrollView,
@@ -17,7 +16,7 @@ import { useApp } from "@/contexts/AppContext";
 import { GLOW_UP_PLANS } from "@/data/glowupPlans";
 import { ROUTINE_TEMPLATES } from "@/data/routines";
 import { useColors } from "@/hooks/useColors";
-import { AR } from "@/constants/i18n";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 function StatBlock({
   icon,
@@ -53,6 +52,7 @@ export default function ProfileScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { t, l, isRTL, toggleLanguage } = useLanguage();
   const { data, getRoutineCompletionPercent } = useApp();
 
   const topInset = Platform.OS === "web" ? 67 : insets.top;
@@ -69,8 +69,6 @@ export default function ProfileScreen() {
     : 0;
   const planProgress =
     totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
-
-  const isRTL = I18nManager.isRTL;
 
   return (
     <ScrollView
@@ -98,9 +96,11 @@ export default function ProfileScreen() {
             />
           </Pressable>
           <Text style={[styles.headerTitle, { color: colors.foreground }]}>
-            {AR.profile.screenTitle}
+            {t.profile.screenTitle}
           </Text>
-          <View style={{ width: 24 }} />
+          <Pressable onPress={toggleLanguage} hitSlop={12}>
+            <MaterialCommunityIcons name="translate" size={22} color={colors.primary} />
+          </Pressable>
         </View>
 
         <View style={styles.avatarRow}>
@@ -115,14 +115,14 @@ export default function ProfileScreen() {
           </View>
           <View style={{ marginTop: 12, alignItems: "center" }}>
             <Text style={[styles.profileName, { color: colors.foreground }]}>
-              {AR.profile.profileName}
+              {t.profile.profileName}
             </Text>
             <View
               style={[styles.streakPill, { backgroundColor: colors.primary }]}
             >
               <MaterialCommunityIcons name="fire" size={14} color="#fff" />
               <Text style={styles.streakPillText}>
-                {data.streak} {AR.profile.dayStreak}
+                {data.streak} {t.profile.dayStreak}
               </Text>
             </View>
           </View>
@@ -132,38 +132,38 @@ export default function ProfileScreen() {
       <View style={styles.content}>
         {/* Key Stats */}
         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
-          {AR.profile.yourStats}
+          {t.profile.yourStats}
         </Text>
         <View style={styles.statsGrid}>
           <StatBlock
             icon="fire"
             value={data.streak}
-            label={AR.profile.statStreak}
+            label={t.profile.statStreak}
             color="#FDEBD0"
           />
           <StatBlock
             icon="checkbox-marked-circle-outline"
             value={data.totalRoutinesCompleted}
-            label={AR.profile.statRoutines}
+            label={t.profile.statRoutines}
             color="#FBE4EC"
           />
           <StatBlock
             icon="heart"
             value={data.favoriteAdvice.length}
-            label={AR.profile.statSaved}
+            label={t.profile.statSaved}
             color="#D8C9E8"
           />
           <StatBlock
             icon="cellphone-off"
             value={data.detoxChallenge.checkedInDays.length}
-            label={AR.profile.statDetox}
+            label={t.profile.statDetox}
             color="#D5ECD4"
           />
         </View>
 
         {/* Active Glow Up Plan */}
         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
-          {AR.profile.activePlan}
+          {t.profile.activePlan}
         </Text>
         {activePlan ? (
           <View
@@ -178,8 +178,8 @@ export default function ProfileScreen() {
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
             >
-              <Text style={styles.planTitle}>{activePlan.title}</Text>
-              <Text style={styles.planTagline}>{activePlan.tagline}</Text>
+              <Text style={styles.planTitle}>{l(activePlan.title, activePlan.titleEn)}</Text>
+              <Text style={styles.planTagline}>{l(activePlan.tagline, activePlan.taglineEn)}</Text>
             </LinearGradient>
             <View style={styles.planBody}>
               <View style={styles.planProgressRow}>
@@ -189,7 +189,7 @@ export default function ProfileScreen() {
                     { color: colors.foreground },
                   ]}
                 >
-                  {completedTasks} {AR.profile.of} {totalTasks} {AR.profile.tasksComplete}
+                  {completedTasks} {t.profile.of} {totalTasks} {t.profile.tasksComplete}
                 </Text>
                 <Text
                   style={[styles.planProgressNum, { color: colors.primary }]}
@@ -213,7 +213,7 @@ export default function ProfileScreen() {
               <Text
                 style={[styles.planDay, { color: colors.mutedForeground }]}
               >
-                {activePlan.duration} {AR.profile.dayPlan}
+                {activePlan.duration} {t.profile.dayPlan}
               </Text>
             </View>
           </View>
@@ -232,14 +232,14 @@ export default function ProfileScreen() {
             <Text
               style={[styles.emptyText, { color: colors.mutedForeground }]}
             >
-              {AR.profile.noPlan}
+              {t.profile.noPlan}
             </Text>
           </View>
         )}
 
         {/* Routine Progress */}
         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
-          {AR.profile.routineProgress}
+          {t.profile.routineProgress}
         </Text>
         <View style={styles.routineList}>
           {ROUTINE_TEMPLATES.map((routine) => {
@@ -271,7 +271,7 @@ export default function ProfileScreen() {
                   <Text
                     style={[styles.routineName, { color: colors.foreground }]}
                   >
-                    {routine.title}
+                    {l(routine.title, routine.titleEn)}
                   </Text>
                   <View
                     style={[

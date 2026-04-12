@@ -8,19 +8,17 @@ import {
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import React, { useEffect } from "react";
-import { I18nManager } from "react-native";
+import React, { useEffect, useState } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AppProvider } from "@/contexts/AppContext";
+import { getStoredLang, LanguageProvider } from "@/contexts/LanguageContext";
+import { Lang } from "@/constants/i18n";
 
 SplashScreen.preventAutoHideAsync();
-
-I18nManager.allowRTL(true);
-I18nManager.forceRTL(true);
 
 const queryClient = new QueryClient();
 
@@ -53,14 +51,19 @@ export default function RootLayout() {
     Inter_600SemiBold,
     Inter_700Bold,
   });
+  const [lang, setLang] = useState<Lang | null>(null);
 
   useEffect(() => {
-    if (fontsLoaded || fontError) {
+    getStoredLang().then((l) => setLang(l));
+  }, []);
+
+  useEffect(() => {
+    if ((fontsLoaded || fontError) && lang !== null) {
       SplashScreen.hideAsync();
     }
-  }, [fontsLoaded, fontError]);
+  }, [fontsLoaded, fontError, lang]);
 
-  if (!fontsLoaded && !fontError) return null;
+  if ((!fontsLoaded && !fontError) || lang === null) return null;
 
   return (
     <SafeAreaProvider>
@@ -68,9 +71,11 @@ export default function RootLayout() {
         <QueryClientProvider client={queryClient}>
           <GestureHandlerRootView style={{ flex: 1 }}>
             <KeyboardProvider>
-              <AppProvider>
-                <RootLayoutNav />
-              </AppProvider>
+              <LanguageProvider initialLang={lang}>
+                <AppProvider>
+                  <RootLayoutNav />
+                </AppProvider>
+              </LanguageProvider>
             </KeyboardProvider>
           </GestureHandlerRootView>
         </QueryClientProvider>
