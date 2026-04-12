@@ -4,6 +4,7 @@ import {
   Inter_600SemiBold,
   Inter_700Bold,
 } from "@expo-google-fonts/inter";
+import { Feather, Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import * as Font from "expo-font";
 import { Stack } from "expo-router";
@@ -51,15 +52,17 @@ export default function RootLayout() {
   useEffect(() => {
     async function loadAll() {
       try {
-        await Font.loadAsync({
-          Inter_400Regular,
-          Inter_500Medium,
-          Inter_600SemiBold,
-          Inter_700Bold,
-          "material-community": require("@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/MaterialCommunityIcons.ttf"),
-          "feather": require("@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Feather.ttf"),
-          "ionicons": require("@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.ttf"),
-        });
+        await Promise.all([
+          Font.loadAsync({
+            Inter_400Regular,
+            Inter_500Medium,
+            Inter_600SemiBold,
+            Inter_700Bold,
+          }),
+          MaterialCommunityIcons.loadFont(),
+          Feather.loadFont(),
+          Ionicons.loadFont(),
+        ]);
       } catch (e) {
         console.warn("Font loading error:", e);
       } finally {
