@@ -50,3 +50,19 @@ Arabic-first bilingual (AR/EN) daily self-improvement Expo/React Native app for 
 - Rate limited: 20 requests/min per IP, max 30 messages per request
 - Client: `artifacts/girlyvibes/app/(tabs)/chat.tsx` with buffered SSE parser
 - API URL from Expo: `https://${EXPO_PUBLIC_DOMAIN}/api/chat`
+
+### Building the Android APK
+
+To produce an installable `.apk` for Android:
+
+1. Create a free account at https://expo.dev
+2. Go to **Account Settings → Access Tokens** and create a new token
+3. Add the token as a Replit secret named `EXPO_TOKEN`
+4. Run the build from the project root:
+   ```
+   pnpm --filter @workspace/girlyvibes run build:android
+   ```
+5. When the build finishes (10–20 min), download the `.apk` from the link printed in the console or from https://expo.dev/accounts/neurocoode/projects/girlyvibes/builds
+6. Transfer the `.apk` to your Android phone and install it (enable "Install from unknown sources" in Android settings)
+
+EAS config: `artifacts/girlyvibes/eas.json` — `preview` profile outputs `.apk`, `production` outputs `.aab` for Play Store.
