@@ -21,8 +21,8 @@ export interface RoutineTemplate {
 export const ROUTINE_TEMPLATES: RoutineTemplate[] = [
   {
     id: "morning",
-    title: "Morning Routine",
-    subtitle: "Start your day glowing",
+    title: "روتين الصباح",
+    subtitle: "ابدئي يومك بتألق",
     emoji: "weather-sunset-up",
     color: "#FDEBD0",
     steps: [
@@ -38,8 +38,8 @@ export const ROUTINE_TEMPLATES: RoutineTemplate[] = [
   },
   {
     id: "school",
-    title: "School Routine",
-    subtitle: "Show up as your best self",
+    title: "روتين المدرسة",
+    subtitle: "احضري بأفضل نسخة منك",
     emoji: "book-open-variant",
     color: "#D5ECD4",
     steps: [
@@ -54,8 +54,8 @@ export const ROUTINE_TEMPLATES: RoutineTemplate[] = [
   },
   {
     id: "evening",
-    title: "Evening Wind-Down",
-    subtitle: "End your day with calm",
+    title: "روتين المساء",
+    subtitle: "أنهي يومك بهدوء",
     emoji: "weather-night",
     color: "#D8C9E8",
     steps: [
@@ -71,8 +71,8 @@ export const ROUTINE_TEMPLATES: RoutineTemplate[] = [
   },
   {
     id: "shower",
-    title: "Everything Shower",
-    subtitle: "Full reset from head to toe",
+    title: "حمام الاهتمام الكامل",
+    subtitle: "تجديد كامل من الرأس للقدم",
     emoji: "shower-head",
     color: "#C9DFF7",
     steps: [
@@ -80,7 +80,7 @@ export const ROUTINE_TEMPLATES: RoutineTemplate[] = [
       { id: "sh2", title: "Shampoo hair", subtitle: "Massage scalp gently", icon: "shaker" },
       { id: "sh3", title: "Deep condition hair", subtitle: "Leave on while showering", icon: "hair-dryer-outline" },
       { id: "sh4", title: "Body scrub", subtitle: "Focus on elbows & knees", icon: "spa-outline" },
-      { id: "sh5", title: "Shave if needed", subtitle: "Take your time", icon: "razor" },
+      { id: "sh5", title: "Shave if needed", subtitle: "Take your time", icon: "scissors-cutting" },
       { id: "sh6", title: "Rinse with cool water", subtitle: "Closes pores & seals shine", icon: "water-thermometer" },
       { id: "sh7", title: "Rinse hair conditioner out", subtitle: "Fully rinse for soft hair", icon: "waves" },
       { id: "sh8", title: "Apply body lotion immediately", subtitle: "While skin is still damp", icon: "lotion" },
@@ -90,8 +90,8 @@ export const ROUTINE_TEMPLATES: RoutineTemplate[] = [
   },
   {
     id: "hygiene",
-    title: "Hygiene A to Z",
-    subtitle: "Daily freshness habits",
+    title: "النظافة من الألف للياء",
+    subtitle: "عادات النظافة اليومية",
     emoji: "star-four-points",
     color: "#F9D9D9",
     steps: [

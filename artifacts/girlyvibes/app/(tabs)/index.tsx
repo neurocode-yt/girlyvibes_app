@@ -17,25 +17,26 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useApp } from "@/contexts/AppContext";
 import { ADVICE_CATEGORIES } from "@/data/advice";
 import { ROUTINE_TEMPLATES } from "@/data/routines";
+import { AR } from "@/constants/i18n";
 import { useColors } from "@/hooks/useColors";
 
 function getGreeting() {
   const hour = new Date().getHours();
-  if (hour < 12) return "Good morning";
-  if (hour < 17) return "Good afternoon";
-  return "Good evening";
+  if (hour < 12) return AR.home.greetingMorning;
+  if (hour < 17) return AR.home.greetingAfternoon;
+  return AR.home.greetingEvening;
 }
 
 function getTip() {
   const tips = [
-    "Consistency is more powerful than perfection. Show up for yourself every day.",
-    "Start small. One healthy habit is better than zero perfect habits.",
-    "Your worth is not determined by your productivity or your appearance.",
-    "Every day you take care of yourself is a day you invest in your future.",
-    "Rest is not laziness. Your body needs rest to grow and glow.",
-    "You are exactly who you need to be right now, and you're becoming even better.",
-    "Drink water. Wash your face. Be kind to yourself. Repeat.",
-    "Small steps in the right direction are still steps forward.",
+    "الاتساق أقوى من الكمال. كوني حاضرة لنفسك كل يوم.",
+    "ابدئي بخطوات صغيرة. عادة صحية واحدة أفضل من صفر عادات مثالية.",
+    "قيمتك لا تُقاس بإنتاجيتك أو مظهرك.",
+    "كل يوم تعتنين فيه بنفسك هو يوم تستثمرين فيه في مستقبلك.",
+    "الراحة ليست كسلاً. جسمك يحتاج الراحة لينمو ويتألق.",
+    "أنتِ بالضبط من تحتاجين أن تكوني الآن، وأنتِ تصبحين أفضل.",
+    "اشربي ماء. اغسلي وجهك. كوني لطيفة مع نفسك. كرري.",
+    "خطوات صغيرة في الاتجاه الصحيح لا تزال خطوات إلى الأمام.",
   ];
   const today = new Date().getDay();
   return tips[today % tips.length];
@@ -124,7 +125,7 @@ export default function HomeScreen() {
               color={colors.primary}
             />
             <Text style={[styles.tipLabel, { color: colors.primary }]}>
-              Today's reminder
+              {AR.home.todayReminder}
             </Text>
           </View>
           <Text style={[styles.tipText, { color: colors.foreground }]}>
@@ -149,7 +150,7 @@ export default function HomeScreen() {
               {data.streak}
             </Text>
             <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>
-              Day streak
+              {AR.home.dayStreak}
             </Text>
           </View>
           <View
@@ -167,7 +168,7 @@ export default function HomeScreen() {
               {data.totalRoutinesCompleted}
             </Text>
             <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>
-              Routines done
+              {AR.home.routinesDone}
             </Text>
           </View>
           <View
@@ -185,14 +186,14 @@ export default function HomeScreen() {
               {data.favoriteAdvice.length}
             </Text>
             <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>
-              Saved reads
+              {AR.home.savedReads}
             </Text>
           </View>
         </View>
 
         {/* Today's Routine Quick Check */}
         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
-          Morning routine
+          {AR.home.morningRoutineSection}
         </Text>
         <Pressable
           style={[
@@ -217,7 +218,7 @@ export default function HomeScreen() {
                   { color: colors.mutedForeground },
                 ]}
               >
-                {topRoutine.steps.length} steps
+                {topRoutine.steps.length} خطوة
               </Text>
             </View>
             <View style={styles.progressCircle}>
@@ -242,7 +243,7 @@ export default function HomeScreen() {
             />
           </View>
           <Text style={[styles.tapHint, { color: colors.mutedForeground }]}>
-            Tap to continue →
+            {AR.home.tapToContinue}
           </Text>
         </Pressable>
 
@@ -250,7 +251,7 @@ export default function HomeScreen() {
         {data.glowUpProgress.activePlanId && (
           <>
             <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
-              Active glow up plan
+              {AR.home.activeplan}
             </Text>
             <Pressable
               style={[
@@ -267,22 +268,26 @@ export default function HomeScreen() {
                 size={24}
                 color="#fff"
               />
-              <View style={{ flex: 1, marginLeft: 12 }}>
+              <View style={{ flex: 1, marginHorizontal: 12 }}>
                 <Text style={styles.planBannerTitle}>
-                  You're in a Glow Up plan!
+                  أنتِ في خطة جلو أب! ✨
                 </Text>
                 <Text style={styles.planBannerSub}>
-                  Keep going — you're doing amazing
+                  استمري — أنتِ رائعة
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={18} color="#fff" />
+              <MaterialCommunityIcons
+                name={isRTL ? "chevron-left" : "chevron-right"}
+                size={18}
+                color="#fff"
+              />
             </Pressable>
           </>
         )}
 
         {/* Featured Advice */}
         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
-          Read of the day
+          {AR.home.readOfDay}
         </Text>
         <Pressable
           style={[
@@ -318,7 +323,7 @@ export default function HomeScreen() {
           </Text>
           <View style={styles.readMoreRow}>
             <Text style={[styles.readMore, { color: colors.primary }]}>
-              Read more
+              اقرئي المزيد
             </Text>
             <Text
               style={[styles.readTime, { color: colors.mutedForeground }]}

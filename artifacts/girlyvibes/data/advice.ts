@@ -18,7 +18,7 @@ export interface AdviceCategory {
 export const ADVICE_CATEGORIES: AdviceCategory[] = [
   {
     id: "teen",
-    title: "Teen Life",
+    title: "حياة المراهقة",
     icon: "star-outline",
     color: "#FDEBD0",
     cards: [
@@ -74,7 +74,7 @@ export const ADVICE_CATEGORIES: AdviceCategory[] = [
   },
   {
     id: "confidence",
-    title: "Confidence",
+    title: "الثقة بالنفس",
     icon: "heart-outline",
     color: "#F7C9D9",
     cards: [
@@ -130,7 +130,7 @@ export const ADVICE_CATEGORIES: AdviceCategory[] = [
   },
   {
     id: "school",
-    title: "School & Study",
+    title: "المدرسة والدراسة",
     icon: "book-outline",
     color: "#D5ECD4",
     cards: [
@@ -186,7 +186,7 @@ export const ADVICE_CATEGORIES: AdviceCategory[] = [
   },
   {
     id: "hygiene",
-    title: "Hygiene & Body",
+    title: "العناية والجسم",
     icon: "water-outline",
     color: "#C9DFF7",
     cards: [
@@ -242,7 +242,7 @@ export const ADVICE_CATEGORIES: AdviceCategory[] = [
   },
   {
     id: "emotional",
-    title: "Emotional Support",
+    title: "الدعم العاطفي",
     icon: "hands-pray",
     color: "#D8C9E8",
     cards: [

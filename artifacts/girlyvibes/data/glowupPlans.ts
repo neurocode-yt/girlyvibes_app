@@ -24,8 +24,8 @@ export interface GlowUpPlan {
 export const GLOW_UP_PLANS: GlowUpPlan[] = [
   {
     id: "7day",
-    title: "7-Day Kickstart",
-    subtitle: "Quick wins for a fresh you",
+    title: "انطلاق ٧ أيام",
+    subtitle: "انتصارات سريعة لنسخة جديدة منك",
     duration: 7,
     color: "#F7C9D9",
     gradient: ["#FBE4EC", "#F7C9D9"],
@@ -91,8 +91,8 @@ export const GLOW_UP_PLANS: GlowUpPlan[] = [
   },
   {
     id: "14day",
-    title: "14-Day Reset",
-    subtitle: "Build habits that last",
+    title: "ريست ١٤ يوم",
+    subtitle: "ابني عادات تدوم",
     duration: 14,
     color: "#C88AA0",
     gradient: ["#F7C9D9", "#C88AA0"],
@@ -214,8 +214,8 @@ export const GLOW_UP_PLANS: GlowUpPlan[] = [
   },
   {
     id: "30day",
-    title: "30-Day Transform",
-    subtitle: "A full month of becoming her",
+    title: "تحول ٣٠ يوم",
+    subtitle: "شهر كامل لتصبحي هي",
     duration: 30,
     color: "#6B4B5C",
     gradient: ["#C88AA0", "#6B4B5C"],

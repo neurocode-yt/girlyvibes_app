@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useApp } from "@/contexts/AppContext";
 import { ADVICE_CATEGORIES, type AdviceCard } from "@/data/advice";
 import { useColors } from "@/hooks/useColors";
+import { AR } from "@/constants/i18n";
 
 function AdviceCardItem({ card }: { card: AdviceCard }) {
   const colors = useColors();
@@ -96,10 +97,10 @@ export default function AdviceScreen() {
         style={[styles.header, { paddingTop: topInset + 16 }]}
       >
         <Text style={[styles.headerTitle, { color: colors.foreground }]}>
-          Advice Library
+          {AR.advice.screenTitle}
         </Text>
         <Text style={[styles.headerSub, { color: colors.mutedForeground }]}>
-          Real guidance from your big sister
+          {AR.advice.screenSubtitle}
         </Text>
 
         {/* Category Pills */}
@@ -129,7 +130,7 @@ export default function AdviceScreen() {
                 },
               ]}
             >
-              All
+              {AR.advice.all}
             </Text>
           </Pressable>
           {ADVICE_CATEGORIES.map((cat) => (

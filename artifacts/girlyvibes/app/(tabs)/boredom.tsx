@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useApp } from "@/contexts/AppContext";
 import { ACTIVITIES, DETOX_CHALLENGES, type Activity } from "@/data/boredom";
 import { useColors } from "@/hooks/useColors";
+import { AR } from "@/constants/i18n";
 
 function ActivityGrid({ highlighted }: { highlighted: string | null }) {
   const colors = useColors();
@@ -92,10 +93,10 @@ function DetoxSection() {
     return (
       <View style={styles.detoxSection}>
         <Text style={[styles.detoxTitle, { color: colors.foreground }]}>
-          Phone Detox Challenge
+          {AR.boredom.detoxTitle}
         </Text>
         <Text style={[styles.detoxSub, { color: colors.mutedForeground }]}>
-          Pick a challenge and reclaim your time
+          {AR.boredom.detoxSub}
         </Text>
         <View style={styles.challengeCards}>
           {DETOX_CHALLENGES.map((ch) => (
@@ -122,7 +123,7 @@ function DetoxSection() {
                   {ch.days}
                 </Text>
                 <Text style={[styles.challengeDayText, { color: colors.primary }]}>
-                  days
+                  {AR.boredom.days}
                 </Text>
               </View>
               <View style={{ flex: 1, marginLeft: 12 }}>
@@ -157,7 +158,7 @@ function DetoxSection() {
       >
         <View style={styles.challengeProgress}>
           <Text style={[styles.challengeProgressText, { color: colors.foreground }]}>
-            Day {daysCompleted} of {totalDays}
+            {AR.boredom.dayOf} {daysCompleted} {AR.boredom.of} {totalDays}
           </Text>
           <Text style={[styles.challengeProgressNum, { color: colors.primary }]}>
             {Math.round(progress * 100)}%
@@ -199,7 +200,7 @@ function DetoxSection() {
             }}
           >
             <MaterialCommunityIcons name="check-circle" size={18} color="#fff" />
-            <Text style={styles.checkInBtnText}>Check in for today</Text>
+            <Text style={styles.checkInBtnText}>{AR.boredom.checkIn}</Text>
           </Pressable>
         ) : (
           <View
@@ -211,7 +212,7 @@ function DetoxSection() {
               color={colors.success}
             />
             <Text style={[styles.checkedInText, { color: colors.successForeground }]}>
-              Checked in today!
+              {AR.boredom.checkedIn}
             </Text>
           </View>
         )}
@@ -266,10 +267,10 @@ export default function BoredomScreen() {
         style={[styles.header, { paddingTop: topInset + 16 }]}
       >
         <Text style={[styles.headerTitle, { color: colors.foreground }]}>
-          Boredom Buster
+          {AR.boredom.screenTitle}
         </Text>
         <Text style={[styles.headerSub, { color: colors.mutedForeground }]}>
-          Put the phone down. Try something real.
+          {AR.boredom.screenSubtitle}
         </Text>
 
         <Pressable
@@ -279,7 +280,7 @@ export default function BoredomScreen() {
           <Animated.View style={{ transform: [{ rotate: spin }] }}>
             <MaterialCommunityIcons name="dice-5-outline" size={22} color="#fff" />
           </Animated.View>
-          <Text style={styles.surpriseBtnText}>Surprise Me</Text>
+          <Text style={styles.surpriseBtnText}>{AR.boredom.surpriseMe}</Text>
         </Pressable>
 
         {highlighted && (
@@ -295,7 +296,7 @@ export default function BoredomScreen() {
               color={colors.primary}
             />
             <Text style={[styles.highlightText, { color: colors.primary }]}>
-              Try:{" "}
+              {AR.boredom.try}{" "}
               <Text style={{ fontFamily: "Inter_600SemiBold" }}>
                 {ACTIVITIES.find((a) => a.id === highlighted)?.title}
               </Text>
@@ -306,7 +307,7 @@ export default function BoredomScreen() {
 
       <View style={styles.content}>
         <Text style={[styles.sectionLabel, { color: colors.foreground }]}>
-          30 offline ideas
+          {AR.boredom.offlineIdeas}
         </Text>
         <ActivityGrid highlighted={highlighted} />
 

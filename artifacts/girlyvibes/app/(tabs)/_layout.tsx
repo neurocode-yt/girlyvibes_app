@@ -6,6 +6,7 @@ import { Platform, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useColors } from "@/hooks/useColors";
+import { AR } from "@/constants/i18n";
 
 export default function TabLayout() {
   const colors = useColors();
@@ -53,8 +54,8 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: "Home",
-          tabBarIcon: ({ color, focused }) => (
+          title: AR.tabs.home,
+          tabBarIcon: ({ color }) => (
             <Feather name="home" size={22} color={color} />
           ),
         }}
@@ -62,7 +63,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="routines"
         options={{
-          title: "Routines",
+          title: AR.tabs.routines,
           tabBarIcon: ({ color }) => (
             <MaterialCommunityIcons name="checkbox-marked-circle-outline" size={22} color={color} />
           ),
@@ -71,7 +72,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="glowup"
         options={{
-          title: "Glow Up",
+          title: AR.tabs.glowup,
           tabBarIcon: ({ color }) => (
             <MaterialCommunityIcons name="star-outline" size={22} color={color} />
           ),
@@ -80,7 +81,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="advice"
         options={{
-          title: "Advice",
+          title: AR.tabs.advice,
           tabBarIcon: ({ color }) => (
             <Feather name="heart" size={21} color={color} />
           ),
@@ -89,7 +90,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="boredom"
         options={{
-          title: "Activities",
+          title: AR.tabs.boredom,
           tabBarIcon: ({ color }) => (
             <MaterialCommunityIcons name="dice-5-outline" size={22} color={color} />
           ),

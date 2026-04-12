@@ -17,6 +17,7 @@ import { useApp } from "@/contexts/AppContext";
 import { GLOW_UP_PLANS } from "@/data/glowupPlans";
 import { ROUTINE_TEMPLATES } from "@/data/routines";
 import { useColors } from "@/hooks/useColors";
+import { AR } from "@/constants/i18n";
 
 function StatBlock({
   icon,
@@ -97,7 +98,7 @@ export default function ProfileScreen() {
             />
           </Pressable>
           <Text style={[styles.headerTitle, { color: colors.foreground }]}>
-            My Progress
+            {AR.profile.screenTitle}
           </Text>
           <View style={{ width: 24 }} />
         </View>
@@ -114,14 +115,14 @@ export default function ProfileScreen() {
           </View>
           <View style={{ marginTop: 12, alignItems: "center" }}>
             <Text style={[styles.profileName, { color: colors.foreground }]}>
-              Glow Up Journey
+              {AR.profile.profileName}
             </Text>
             <View
               style={[styles.streakPill, { backgroundColor: colors.primary }]}
             >
               <MaterialCommunityIcons name="fire" size={14} color="#fff" />
               <Text style={styles.streakPillText}>
-                {data.streak} day streak
+                {data.streak} {AR.profile.dayStreak}
               </Text>
             </View>
           </View>
@@ -131,38 +132,38 @@ export default function ProfileScreen() {
       <View style={styles.content}>
         {/* Key Stats */}
         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
-          Your stats
+          {AR.profile.yourStats}
         </Text>
         <View style={styles.statsGrid}>
           <StatBlock
             icon="fire"
             value={data.streak}
-            label="Day streak"
+            label={AR.profile.statStreak}
             color="#FDEBD0"
           />
           <StatBlock
             icon="checkbox-marked-circle-outline"
             value={data.totalRoutinesCompleted}
-            label="Routines done"
+            label={AR.profile.statRoutines}
             color="#FBE4EC"
           />
           <StatBlock
             icon="heart"
             value={data.favoriteAdvice.length}
-            label="Saved reads"
+            label={AR.profile.statSaved}
             color="#D8C9E8"
           />
           <StatBlock
             icon="cellphone-off"
             value={data.detoxChallenge.checkedInDays.length}
-            label="Detox days"
+            label={AR.profile.statDetox}
             color="#D5ECD4"
           />
         </View>
 
         {/* Active Glow Up Plan */}
         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
-          Active glow up plan
+          {AR.profile.activePlan}
         </Text>
         {activePlan ? (
           <View
@@ -188,7 +189,7 @@ export default function ProfileScreen() {
                     { color: colors.foreground },
                   ]}
                 >
-                  {completedTasks} of {totalTasks} tasks complete
+                  {completedTasks} {AR.profile.of} {totalTasks} {AR.profile.tasksComplete}
                 </Text>
                 <Text
                   style={[styles.planProgressNum, { color: colors.primary }]}
@@ -212,7 +213,7 @@ export default function ProfileScreen() {
               <Text
                 style={[styles.planDay, { color: colors.mutedForeground }]}
               >
-                {activePlan.duration}-day plan
+                {activePlan.duration} {AR.profile.dayPlan}
               </Text>
             </View>
           </View>
@@ -231,14 +232,14 @@ export default function ProfileScreen() {
             <Text
               style={[styles.emptyText, { color: colors.mutedForeground }]}
             >
-              No active plan — start one in Glow Up
+              {AR.profile.noPlan}
             </Text>
           </View>
         )}
 
         {/* Routine Progress */}
         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
-          Routine progress
+          {AR.profile.routineProgress}
         </Text>
         <View style={styles.routineList}>
           {ROUTINE_TEMPLATES.map((routine) => {

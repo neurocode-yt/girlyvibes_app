@@ -3,6 +3,7 @@ import * as Haptics from "expo-haptics";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React from "react";
 import {
+  I18nManager,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -37,6 +38,7 @@ export default function AdviceDetailScreen() {
   }
 
   const fav = isFavorite(card.id);
+  const isRTL = I18nManager.isRTL;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -47,12 +49,13 @@ export default function AdviceDetailScreen() {
             paddingTop: insets.top + 8,
             borderBottomColor: colors.border,
             backgroundColor: colors.background,
+            flexDirection: isRTL ? "row-reverse" : "row",
           },
         ]}
       >
         <Pressable onPress={() => router.back()} hitSlop={12}>
           <MaterialCommunityIcons
-            name="arrow-left"
+            name={isRTL ? "arrow-right" : "arrow-left"}
             size={24}
             color={colors.foreground}
           />

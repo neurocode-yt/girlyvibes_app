@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useApp } from "@/contexts/AppContext";
 import { ROUTINE_TEMPLATES, type RoutineTemplate } from "@/data/routines";
 import { useColors } from "@/hooks/useColors";
+import { AR } from "@/constants/i18n";
 
 function RoutineCard({
   routine,
@@ -145,7 +146,7 @@ function RoutineCard({
               onPress={handleComplete}
             >
               <MaterialCommunityIcons name="check-circle" size={18} color="#fff" />
-              <Text style={styles.completeBtnText}>Mark as complete</Text>
+              <Text style={styles.completeBtnText}>{AR.routines.markComplete}</Text>
             </Pressable>
           )}
         </View>
@@ -174,10 +175,10 @@ export default function RoutinesScreen() {
         style={[styles.header, { paddingTop: topInset + 16 }]}
       >
         <Text style={[styles.headerTitle, { color: colors.foreground }]}>
-          My Routines
+          {AR.routines.screenTitle}
         </Text>
         <Text style={[styles.headerSub, { color: colors.mutedForeground }]}>
-          Build habits that stick
+          {AR.routines.screenSubtitle}
         </Text>
       </LinearGradient>
 
