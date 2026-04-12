@@ -1,10 +1,8 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { reloadAppAsync } from "expo";
 import React, {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useState,
 } from "react";
 import { I18nManager } from "react-native";
@@ -18,7 +16,7 @@ interface LanguageContextType {
   t: Translations;
   isRTL: boolean;
   l: (ar: string, en: string) => string;
-  toggleLanguage: () => Promise<void>;
+  toggleLanguage: () => void;
 }
 
 const LanguageContext = createContext<LanguageContextType | null>(null);
@@ -28,7 +26,6 @@ export async function getStoredLang(): Promise<Lang> {
     const stored = await AsyncStorage.getItem(LANG_KEY);
     if (stored === "en" || stored === "ar") return stored;
   } catch {
-    // ignore
   }
   return "ar";
 }
@@ -42,20 +39,16 @@ export function LanguageProvider({
 }) {
   const [lang, setLang] = useState<Lang>(initialLang);
 
-  useEffect(() => {
-    const isAr = lang === "ar";
-    I18nManager.allowRTL(isAr);
-    I18nManager.forceRTL(isAr);
-  }, [lang]);
-
-  const toggleLanguage = useCallback(async () => {
-    const next: Lang = lang === "ar" ? "en" : "ar";
-    await AsyncStorage.setItem(LANG_KEY, next);
-    const isAr = next === "ar";
-    I18nManager.allowRTL(isAr);
-    I18nManager.forceRTL(isAr);
-    await reloadAppAsync();
-  }, [lang]);
+  const toggleLanguage = useCallback(() => {
+    setLang((prev) => {
+      const next: Lang = prev === "ar" ? "en" : "ar";
+      AsyncStorage.setItem(LANG_KEY, next);
+      const isAr = next === "ar";
+      I18nManager.allowRTL(isAr);
+      I18nManager.forceRTL(isAr);
+      return next;
+    });
+  }, []);
 
   const t = lang === "ar" ? AR : EN;
   const isRTL = lang === "ar";
