@@ -1,36 +1,115 @@
-import createExpoIconSet from "@expo/vector-icons/createIconSet";
-import { Platform } from "react-native";
+import React from "react";
+import Svg, { Path, Circle } from "react-native-svg";
 
-const mciGlyphs = require("@expo/vector-icons/build/vendor/react-native-vector-icons/glyphmaps/MaterialCommunityIcons.json");
-const featherGlyphs = require("@expo/vector-icons/build/vendor/react-native-vector-icons/glyphmaps/Feather.json");
-const ioniconsGlyphs = require("@expo/vector-icons/build/vendor/react-native-vector-icons/glyphmaps/Ionicons.json");
+interface IconProps {
+  name: string;
+  size?: number;
+  color?: string;
+  style?: any;
+}
 
-export const mciFont = Platform.OS === "android"
-  ? "Material Design Icons"
-  : "material-community";
+const SVG_PATHS: Record<string, string[]> = {
+  "fire": [
+    "M13.5.67s.74 2.65.74 4.8c0 2.06-1.35 3.73-3.41 3.73-2.07 0-3.63-1.67-3.63-3.73l.03-.36C5.21 7.51 4 10.62 4 14c0 4.42 3.58 8 8 8s8-3.58 8-8C20 8.61 17.41 3.8 13.5.67zM11.71 19c-1.78 0-3.22-1.4-3.22-3.14 0-1.62 1.05-2.76 2.81-3.12 1.77-.36 3.6-1.21 4.62-2.58.39 1.29.59 2.65.59 4.04 0 2.65-2.15 4.8-4.8 4.8z",
+  ],
+  "flame": [
+    "M13.5.67s.74 2.65.74 4.8c0 2.06-1.35 3.73-3.41 3.73-2.07 0-3.63-1.67-3.63-3.73l.03-.36C5.21 7.51 4 10.62 4 14c0 4.42 3.58 8 8 8s8-3.58 8-8C20 8.61 17.41 3.8 13.5.67zM11.71 19c-1.78 0-3.22-1.4-3.22-3.14 0-1.62 1.05-2.76 2.81-3.12 1.77-.36 3.6-1.21 4.62-2.58.39 1.29.59 2.65.59 4.04 0 2.65-2.15 4.8-4.8 4.8z",
+  ],
+  "heart": [
+    "M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z",
+  ],
+  "heart-outline": [
+    "M16.5 3c-1.74 0-3.41.81-4.5 2.09C10.91 3.81 9.24 3 7.5 3 4.42 3 2 5.42 2 8.5c0 3.78 3.4 6.86 8.55 11.54L12 21.35l1.45-1.32C18.6 15.36 22 12.28 22 8.5 22 5.42 19.58 3 16.5 3zm-4.4 15.55l-.1.1-.1-.1C7.14 14.24 4 11.39 4 8.5 4 6.5 5.5 5 7.5 5c1.54 0 3.04.99 3.57 2.36h1.87C13.46 5.99 14.96 5 16.5 5c2 0 3.5 1.5 3.5 3.5 0 2.89-3.14 5.74-7.9 10.05z",
+  ],
+  "home": [
+    "M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z",
+  ],
+  "star-outline": [
+    "M22 9.24l-7.19-.62L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21 12 17.27 18.18 21l-1.63-7.03L22 9.24zM12 15.4l-3.76 2.27 1-4.28-3.32-2.88 4.38-.38L12 6.1l1.71 4.04 4.38.38-3.32 2.88 1 4.28L12 15.4z",
+  ],
+  "star": [
+    "M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z",
+  ],
+  "star-four-points": [
+    "M12 1l2.59 7.41L22 12l-7.41 2.59L12 22l-2.59-7.41L2 12l7.41-2.59z",
+  ],
+  "star-shooting": [
+    "M12 1l2.59 7.41L22 12l-7.41 2.59L12 22l-2.59-7.41L2 12l7.41-2.59z",
+    "M3 3l3 3M3 7l1.5 1.5M7 3l1.5 1.5",
+  ],
+  "check": [
+    "M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z",
+  ],
+  "check-circle": [
+    "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z",
+  ],
+  "check-circle-outline": [
+    "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z",
+    "M10 14.17l-3.17-3.17-1.42 1.41L10 17l8-8-1.41-1.41z",
+  ],
+  "checkbox-marked-circle-outline": [
+    "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z",
+    "M10 14.17l-3.17-3.17-1.42 1.41L10 17l8-8-1.41-1.41z",
+  ],
+  "clock-outline": [
+    "M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8z",
+    "M12.5 7H11v6l5.25 3.15.75-1.23-4.5-2.67z",
+  ],
+  "dice-5-outline": [
+    "M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14z",
+  ],
+  "account-outline": [
+    "M12 5.9a2.1 2.1 0 1 1 0 4.2 2.1 2.1 0 0 1 0-4.2m0 9c2.97 0 6.1 1.46 6.1 2.1v1.1H5.9V17c0-.64 3.13-2.1 6.1-2.1M12 4C9.79 4 8 5.79 8 8s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm0 9c-2.67 0-8 1.34-8 4v3h16v-3c0-2.66-5.33-4-8-4z",
+  ],
+  "translate": [
+    "M12.87 15.07l-2.54-2.51.03-.03A17.52 17.52 0 0 0 14.07 6H17V4h-7V2H8v2H1v1.99h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11.76-2.04zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2l-4.5-12zm-2.62 7l1.62-4.33L19.12 17h-3.24z",
+  ],
+  "time-outline": [
+    "M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8z",
+    "M12.5 7H11v6l5.25 3.15.75-1.23-4.5-2.67z",
+  ],
+};
 
-export const featherFont = Platform.OS === "android"
-  ? "Feather"
-  : "feather";
+const STROKE_ICONS = new Set(["star-shooting"]);
 
-export const ioniconsFont = Platform.OS === "android"
-  ? "Ionicons"
-  : "ionicons";
+function SvgIcon({ name, size = 24, color = "black", style }: IconProps) {
+  const paths = SVG_PATHS[name];
+  if (!paths) {
+    return null;
+  }
+  const isStroke = STROKE_ICONS.has(name);
 
-export const AppMaterialCommunityIcons = createExpoIconSet(
-  mciGlyphs,
-  mciFont,
-  require("../assets/fonts/MaterialCommunityIcons.ttf")
-);
+  return (
+    <Svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      style={style}
+    >
+      {paths.map((d, i) => (
+        <Path
+          key={i}
+          d={d}
+          fill={isStroke ? "none" : color}
+          stroke={isStroke ? color : "none"}
+          strokeWidth={isStroke ? 2 : 0}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      ))}
+      {name === "dice-5-outline" && (
+        <>
+          <Circle cx="7.5" cy="7.5" r="1.5" fill={color} />
+          <Circle cx="16.5" cy="7.5" r="1.5" fill={color} />
+          <Circle cx="12" cy="12" r="1.5" fill={color} />
+          <Circle cx="7.5" cy="16.5" r="1.5" fill={color} />
+          <Circle cx="16.5" cy="16.5" r="1.5" fill={color} />
+        </>
+      )}
+    </Svg>
+  );
+}
 
-export const AppFeather = createExpoIconSet(
-  featherGlyphs,
-  featherFont,
-  require("../assets/fonts/Feather.ttf")
-);
-
-export const AppIonicons = createExpoIconSet(
-  ioniconsGlyphs,
-  ioniconsFont,
-  require("../assets/fonts/Ionicons.ttf")
-);
+export const AppMaterialCommunityIcons = SvgIcon;
+export const AppFeather = SvgIcon;
+export const AppIonicons = SvgIcon;

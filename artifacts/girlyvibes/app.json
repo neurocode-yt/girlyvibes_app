@@ -29,26 +29,11 @@
     "web": {
       "favicon": "./assets/images/icon.png"
     },
-    "assets": [
-      "./assets/fonts/MaterialCommunityIcons.ttf",
-      "./assets/fonts/Feather.ttf",
-      "./assets/fonts/Ionicons.ttf"
-    ],
     "plugins": [
       [
         "expo-router",
         {
           "origin": "https://replit.com/"
-        }
-      ],
-      [
-        "expo-font",
-        {
-          "fonts": [
-            "./assets/fonts/MaterialCommunityIcons.ttf",
-            "./assets/fonts/Feather.ttf",
-            "./assets/fonts/Ionicons.ttf"
-          ]
         }
       ],
       "expo-web-browser"
