@@ -29,6 +29,11 @@
     "web": {
       "favicon": "./assets/images/icon.png"
     },
+    "assets": [
+      "./assets/fonts/MaterialCommunityIcons.ttf",
+      "./assets/fonts/Feather.ttf",
+      "./assets/fonts/Ionicons.ttf"
+    ],
     "plugins": [
       [
         "expo-router",
@@ -40,9 +45,9 @@
         "expo-font",
         {
           "fonts": [
-            "./node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/MaterialCommunityIcons.ttf",
-            "./node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Feather.ttf",
-            "./node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.ttf"
+            "./assets/fonts/MaterialCommunityIcons.ttf",
+            "./assets/fonts/Feather.ttf",
+            "./assets/fonts/Ionicons.ttf"
           ]
         }
       ],
