@@ -3,10 +3,9 @@ import {
   Inter_500Medium,
   Inter_600SemiBold,
   Inter_700Bold,
-  useFonts,
 } from "@expo-google-fonts/inter";
-import { Feather, Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import * as Font from "expo-font";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect, useState } from "react";
@@ -46,28 +45,41 @@ function RootLayoutNav() {
 }
 
 export default function RootLayout() {
-  const [fontsLoaded, fontError] = useFonts({
-    Inter_400Regular,
-    Inter_500Medium,
-    Inter_600SemiBold,
-    Inter_700Bold,
-    ...MaterialCommunityIcons.font,
-    ...Feather.font,
-    ...Ionicons.font,
-  });
+  const [fontsLoaded, setFontsLoaded] = useState(false);
   const [lang, setLang] = useState<Lang | null>(null);
+
+  useEffect(() => {
+    async function loadAll() {
+      try {
+        await Font.loadAsync({
+          Inter_400Regular,
+          Inter_500Medium,
+          Inter_600SemiBold,
+          Inter_700Bold,
+          "material-community": require("@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/MaterialCommunityIcons.ttf"),
+          "feather": require("@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Feather.ttf"),
+          "ionicons": require("@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.ttf"),
+        });
+      } catch (e) {
+        console.warn("Font loading error:", e);
+      } finally {
+        setFontsLoaded(true);
+      }
+    }
+    loadAll();
+  }, []);
 
   useEffect(() => {
     getStoredLang().then((l) => setLang(l));
   }, []);
 
   useEffect(() => {
-    if ((fontsLoaded || fontError) && lang !== null) {
+    if (fontsLoaded && lang !== null) {
       SplashScreen.hideAsync();
     }
-  }, [fontsLoaded, fontError, lang]);
+  }, [fontsLoaded, lang]);
 
-  if ((!fontsLoaded && !fontError) || lang === null) return null;
+  if (!fontsLoaded || lang === null) return null;
 
   return (
     <SafeAreaProvider>
