@@ -186,14 +186,14 @@ function PlanCard({
                         key={task.id}
                         style={styles.taskRow}
                         onPress={async () => {
-                          if (!isPast || isToday) {
+                          if (isToday) {
                             await Haptics.impactAsync(
                               Haptics.ImpactFeedbackStyle.Light
                             );
                             await toggleGlowUpTask(plan.id, d.day, task.id);
                           }
                         }}
-                        disabled={isPast && !isToday}
+                        disabled={!isToday}
                       >
                         <View
                           style={[

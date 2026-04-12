@@ -99,7 +99,7 @@ export default function AdviceDetailScreen() {
             color={colors.mutedForeground}
           />
           <Text style={[styles.readTime, { color: colors.mutedForeground }]}>
-            {card.readTime} read
+            {card.readTime}
           </Text>
         </View>
         <View
