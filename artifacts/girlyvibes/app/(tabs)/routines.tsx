@@ -52,7 +52,7 @@ function RoutineCard({
       <Pressable onPress={onToggle} style={styles.cardHeader}>
         <View style={[styles.iconBox, { backgroundColor: routine.color }]}>
           <MaterialCommunityIcons
-            name={routine.emoji as any}
+            name={routine.emoji}
             size={22}
             color={colors.primary}
           />

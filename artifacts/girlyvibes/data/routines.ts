@@ -1,15 +1,19 @@
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+
+type IconName = keyof typeof MaterialCommunityIcons.glyphMap;
+
 export interface RoutineStep {
   id: string;
   title: string;
   subtitle?: string;
-  icon: string;
+  icon: IconName;
 }
 
 export interface RoutineTemplate {
   id: string;
   title: string;
   subtitle: string;
-  emoji: string;
+  emoji: IconName;
   color: string;
   steps: RoutineStep[];
 }
@@ -19,7 +23,7 @@ export const ROUTINE_TEMPLATES: RoutineTemplate[] = [
     id: "morning",
     title: "Morning Routine",
     subtitle: "Start your day glowing",
-    emoji: "sunrise",
+    emoji: "weather-sunset-up",
     color: "#FDEBD0",
     steps: [
       { id: "m1", title: "Drink a glass of water", subtitle: "Hydrate right away", icon: "water" },

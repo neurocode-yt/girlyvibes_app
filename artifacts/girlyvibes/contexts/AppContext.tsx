@@ -46,7 +46,7 @@ interface AppContextType {
   startGlowUpPlan: (planId: string) => Promise<void>;
   toggleGlowUpTask: (planId: string, dayNum: number, taskId: string) => Promise<void>;
   isGlowUpTaskDone: (planId: string, dayNum: number, taskId: string) => boolean;
-  getDayProgress: (planId: string, dayNum: number, totalTasks: number) => number;
+  getDayProgress: (planId: string, dayNum: number, taskIds: string[]) => number;
   getCurrentDay: () => number;
   startDetoxChallenge: (challengeId: string) => Promise<void>;
   checkInDetox: () => Promise<void>;
@@ -193,14 +193,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   );
 
   const getDayProgress = useCallback(
-    (planId: string, dayNum: number, totalTasks: number) => {
-      if (totalTasks === 0) return 0;
-      let done = 0;
-      for (let i = 0; i < totalTasks; i++) {
-        const key = `${planId}_d${dayNum}_task`;
-        if (data.glowUpProgress.completedTasks[key]) done++;
-      }
-      return Math.round((done / totalTasks) * 100);
+    (planId: string, dayNum: number, taskIds: string[]) => {
+      if (taskIds.length === 0) return 0;
+      const done = taskIds.filter((taskId) => {
+        const key = `${planId}_d${dayNum}_${taskId}`;
+        return data.glowUpProgress.completedTasks[key];
+      }).length;
+      return Math.round((done / taskIds.length) * 100);
     },
     [data]
   );

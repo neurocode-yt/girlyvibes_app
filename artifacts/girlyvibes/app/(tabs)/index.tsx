@@ -4,6 +4,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import React, { useMemo } from "react";
 import {
+  I18nManager,
   Platform,
   Pressable,
   ScrollView,
@@ -65,6 +66,7 @@ export default function HomeScreen() {
   }, []);
 
   const topInset = Platform.OS === "web" ? 67 : insets.top;
+  const isRTL = I18nManager.isRTL;
 
   return (
     <ScrollView
@@ -78,20 +80,31 @@ export default function HomeScreen() {
         colors={[colors.card, colors.background]}
         style={[styles.header, { paddingTop: topInset + 16 }]}
       >
-        <View style={styles.headerRow}>
+        <View style={[styles.headerRow, { flexDirection: isRTL ? "row-reverse" : "row" }]}>
           <View>
-            <Text style={[styles.greeting, { color: colors.mutedForeground }]}>
+            <Text style={[styles.greeting, { color: colors.mutedForeground, textAlign: isRTL ? "right" : "left" }]}>
               {greeting} ✦
             </Text>
-            <Text style={[styles.brandName, { color: colors.foreground }]}>
+            <Text style={[styles.brandName, { color: colors.foreground, textAlign: isRTL ? "right" : "left" }]}>
               Girly Vibes
             </Text>
           </View>
-          <View
-            style={[styles.streakBadge, { backgroundColor: colors.primary }]}
-          >
-            <Ionicons name="flame" size={16} color="#fff" />
-            <Text style={styles.streakText}>{data.streak}</Text>
+          <View style={[styles.headerActions, { flexDirection: isRTL ? "row-reverse" : "row" }]}>
+            <Pressable
+              onPress={() => {
+                Haptics.selectionAsync();
+                router.push("/profile");
+              }}
+              style={[styles.profileBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+            >
+              <MaterialCommunityIcons name="account-outline" size={20} color={colors.primary} />
+            </Pressable>
+            <View
+              style={[styles.streakBadge, { backgroundColor: colors.primary }]}
+            >
+              <Ionicons name="flame" size={16} color="#fff" />
+              <Text style={styles.streakText}>{data.streak}</Text>
+            </View>
           </View>
         </View>
       </LinearGradient>
@@ -328,9 +341,20 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
   },
   headerRow: {
-    flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+  },
+  headerActions: {
+    alignItems: "center",
+    gap: 8,
+  },
+  profileBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
   },
   greeting: {
     fontSize: 13,

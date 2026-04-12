@@ -1,0 +1,471 @@
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
+import React from "react";
+import {
+  I18nManager,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+import { useApp } from "@/contexts/AppContext";
+import { GLOW_UP_PLANS } from "@/data/glowupPlans";
+import { ROUTINE_TEMPLATES } from "@/data/routines";
+import { useColors } from "@/hooks/useColors";
+
+function StatBlock({
+  icon,
+  value,
+  label,
+  color,
+}: {
+  icon: React.ComponentProps<typeof MaterialCommunityIcons>["name"];
+  value: string | number;
+  label: string;
+  color: string;
+}) {
+  const colors = useColors();
+  return (
+    <View
+      style={[
+        styles.statBlock,
+        { backgroundColor: color, borderColor: colors.border },
+      ]}
+    >
+      <MaterialCommunityIcons name={icon} size={26} color={colors.primary} />
+      <Text style={[styles.statValue, { color: colors.foreground }]}>
+        {value}
+      </Text>
+      <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>
+        {label}
+      </Text>
+    </View>
+  );
+}
+
+export default function ProfileScreen() {
+  const colors = useColors();
+  const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const { data, getRoutineCompletionPercent } = useApp();
+
+  const topInset = Platform.OS === "web" ? 67 : insets.top;
+
+  const activePlan = data.glowUpProgress.activePlanId
+    ? GLOW_UP_PLANS.find((p) => p.id === data.glowUpProgress.activePlanId)
+    : null;
+
+  const totalTasks = activePlan
+    ? activePlan.days.reduce((acc, d) => acc + d.tasks.length, 0)
+    : 0;
+  const completedTasks = activePlan
+    ? Object.values(data.glowUpProgress.completedTasks).filter(Boolean).length
+    : 0;
+  const planProgress =
+    totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
+  const isRTL = I18nManager.isRTL;
+
+  return (
+    <ScrollView
+      style={[styles.container, { backgroundColor: colors.background }]}
+      contentContainerStyle={{
+        paddingBottom: Platform.OS === "web" ? 100 : 120,
+      }}
+      showsVerticalScrollIndicator={false}
+    >
+      <LinearGradient
+        colors={[colors.card, colors.background]}
+        style={[styles.header, { paddingTop: topInset + 12 }]}
+      >
+        <View
+          style={[
+            styles.navRow,
+            { flexDirection: isRTL ? "row-reverse" : "row" },
+          ]}
+        >
+          <Pressable onPress={() => router.back()} hitSlop={12}>
+            <MaterialCommunityIcons
+              name={isRTL ? "arrow-right" : "arrow-left"}
+              size={24}
+              color={colors.foreground}
+            />
+          </Pressable>
+          <Text style={[styles.headerTitle, { color: colors.foreground }]}>
+            My Progress
+          </Text>
+          <View style={{ width: 24 }} />
+        </View>
+
+        <View style={styles.avatarRow}>
+          <View
+            style={[styles.avatar, { backgroundColor: colors.highlight }]}
+          >
+            <MaterialCommunityIcons
+              name="star-four-points"
+              size={36}
+              color={colors.primary}
+            />
+          </View>
+          <View style={{ marginTop: 12, alignItems: "center" }}>
+            <Text style={[styles.profileName, { color: colors.foreground }]}>
+              Glow Up Journey
+            </Text>
+            <View
+              style={[styles.streakPill, { backgroundColor: colors.primary }]}
+            >
+              <MaterialCommunityIcons name="fire" size={14} color="#fff" />
+              <Text style={styles.streakPillText}>
+                {data.streak} day streak
+              </Text>
+            </View>
+          </View>
+        </View>
+      </LinearGradient>
+
+      <View style={styles.content}>
+        {/* Key Stats */}
+        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
+          Your stats
+        </Text>
+        <View style={styles.statsGrid}>
+          <StatBlock
+            icon="fire"
+            value={data.streak}
+            label="Day streak"
+            color="#FDEBD0"
+          />
+          <StatBlock
+            icon="checkbox-marked-circle-outline"
+            value={data.totalRoutinesCompleted}
+            label="Routines done"
+            color="#FBE4EC"
+          />
+          <StatBlock
+            icon="heart"
+            value={data.favoriteAdvice.length}
+            label="Saved reads"
+            color="#D8C9E8"
+          />
+          <StatBlock
+            icon="cellphone-off"
+            value={data.detoxChallenge.checkedInDays.length}
+            label="Detox days"
+            color="#D5ECD4"
+          />
+        </View>
+
+        {/* Active Glow Up Plan */}
+        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
+          Active glow up plan
+        </Text>
+        {activePlan ? (
+          <View
+            style={[
+              styles.planCard,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+          >
+            <LinearGradient
+              colors={activePlan.gradient}
+              style={styles.planGradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <Text style={styles.planTitle}>{activePlan.title}</Text>
+              <Text style={styles.planTagline}>{activePlan.tagline}</Text>
+            </LinearGradient>
+            <View style={styles.planBody}>
+              <View style={styles.planProgressRow}>
+                <Text
+                  style={[
+                    styles.planProgressLabel,
+                    { color: colors.foreground },
+                  ]}
+                >
+                  {completedTasks} of {totalTasks} tasks complete
+                </Text>
+                <Text
+                  style={[styles.planProgressNum, { color: colors.primary }]}
+                >
+                  {planProgress}%
+                </Text>
+              </View>
+              <View
+                style={[styles.progressBar, { backgroundColor: colors.border }]}
+              >
+                <View
+                  style={[
+                    styles.progressFill,
+                    {
+                      width: `${planProgress}%` as `${number}%`,
+                      backgroundColor: colors.primary,
+                    },
+                  ]}
+                />
+              </View>
+              <Text
+                style={[styles.planDay, { color: colors.mutedForeground }]}
+              >
+                {activePlan.duration}-day plan
+              </Text>
+            </View>
+          </View>
+        ) : (
+          <View
+            style={[
+              styles.emptyCard,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+          >
+            <MaterialCommunityIcons
+              name="star-outline"
+              size={32}
+              color={colors.mutedForeground}
+            />
+            <Text
+              style={[styles.emptyText, { color: colors.mutedForeground }]}
+            >
+              No active plan — start one in Glow Up
+            </Text>
+          </View>
+        )}
+
+        {/* Routine Progress */}
+        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
+          Routine progress
+        </Text>
+        <View style={styles.routineList}>
+          {ROUTINE_TEMPLATES.map((routine) => {
+            const pct = getRoutineCompletionPercent(
+              routine.id,
+              routine.steps.length
+            );
+            return (
+              <View
+                key={routine.id}
+                style={[
+                  styles.routineRow,
+                  { borderColor: colors.border, backgroundColor: colors.card },
+                ]}
+              >
+                <View
+                  style={[
+                    styles.routineIcon,
+                    { backgroundColor: routine.color },
+                  ]}
+                >
+                  <MaterialCommunityIcons
+                    name={routine.emoji}
+                    size={18}
+                    color={colors.primary}
+                  />
+                </View>
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <Text
+                    style={[styles.routineName, { color: colors.foreground }]}
+                  >
+                    {routine.title}
+                  </Text>
+                  <View
+                    style={[
+                      styles.progressBar,
+                      { backgroundColor: colors.border, marginTop: 6 },
+                    ]}
+                  >
+                    <View
+                      style={[
+                        styles.progressFill,
+                        {
+                          width: `${pct}%` as `${number}%`,
+                          backgroundColor: colors.primary,
+                        },
+                      ]}
+                    />
+                  </View>
+                </View>
+                <Text style={[styles.pctText, { color: colors.primary }]}>
+                  {pct}%
+                </Text>
+              </View>
+            );
+          })}
+        </View>
+      </View>
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1 },
+  header: {
+    paddingHorizontal: 20,
+    paddingBottom: 24,
+  },
+  navRow: {
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 20,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontFamily: "Inter_600SemiBold",
+  },
+  avatarRow: {
+    alignItems: "center",
+  },
+  avatar: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  profileName: {
+    fontSize: 20,
+    fontFamily: "Inter_700Bold",
+    marginTop: 10,
+    marginBottom: 8,
+  },
+  streakPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  streakPillText: {
+    color: "#fff",
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 13,
+  },
+  content: {
+    paddingHorizontal: 16,
+    gap: 12,
+  },
+  sectionTitle: {
+    fontSize: 17,
+    fontFamily: "Inter_600SemiBold",
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  statsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    marginBottom: 4,
+  },
+  statBlock: {
+    width: "47%",
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    alignItems: "center",
+    gap: 6,
+  },
+  statValue: {
+    fontSize: 26,
+    fontFamily: "Inter_700Bold",
+  },
+  statLabel: {
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    textAlign: "center",
+  },
+  planCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    overflow: "hidden",
+    marginBottom: 4,
+  },
+  planGradient: {
+    padding: 18,
+  },
+  planTitle: {
+    color: "#fff",
+    fontSize: 20,
+    fontFamily: "Inter_700Bold",
+  },
+  planTagline: {
+    color: "rgba(255,255,255,0.85)",
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    marginTop: 4,
+  },
+  planBody: {
+    padding: 16,
+  },
+  planProgressRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  planProgressLabel: {
+    fontSize: 13,
+    fontFamily: "Inter_500Medium",
+  },
+  planProgressNum: {
+    fontSize: 16,
+    fontFamily: "Inter_700Bold",
+  },
+  progressBar: {
+    height: 6,
+    borderRadius: 3,
+    overflow: "hidden",
+  },
+  progressFill: {
+    height: "100%",
+    borderRadius: 3,
+  },
+  planDay: {
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    marginTop: 8,
+  },
+  emptyCard: {
+    padding: 24,
+    borderRadius: 18,
+    borderWidth: 1,
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 4,
+  },
+  emptyText: {
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
+    textAlign: "center",
+  },
+  routineList: {
+    gap: 10,
+  },
+  routineRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  routineIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  routineName: {
+    fontSize: 14,
+    fontFamily: "Inter_500Medium",
+  },
+  pctText: {
+    fontSize: 13,
+    fontFamily: "Inter_700Bold",
+    marginLeft: 10,
+  },
+});

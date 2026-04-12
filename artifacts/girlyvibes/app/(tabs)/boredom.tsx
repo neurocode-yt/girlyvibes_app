@@ -39,7 +39,7 @@ function ActivityGrid({ highlighted }: { highlighted: string | null }) {
             ]}
           >
             <MaterialCommunityIcons
-              name={activity.icon as any}
+              name={activity.icon}
               size={22}
               color={isHighlighted ? "#fff" : colors.primary}
             />

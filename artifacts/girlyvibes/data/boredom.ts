@@ -1,7 +1,11 @@
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+
+type IconName = keyof typeof MaterialCommunityIcons.glyphMap;
+
 export interface Activity {
   id: string;
   title: string;
-  icon: string;
+  icon: IconName;
   category: string;
   duration: string;
   color: string;
