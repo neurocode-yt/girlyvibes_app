@@ -9,11 +9,13 @@ import * as Font from "expo-font";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect, useState } from "react";
+import { Platform } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { mciFont, featherFont, ioniconsFont } from "@/components/Icons";
 import { AppProvider } from "@/contexts/AppContext";
 import { getStoredLang, LanguageProvider } from "@/contexts/LanguageContext";
 import { Lang } from "@/constants/i18n";
@@ -56,12 +58,19 @@ export default function RootLayout() {
           Inter_500Medium,
           Inter_600SemiBold,
           Inter_700Bold,
-          "material-community": require("../assets/fonts/MaterialCommunityIcons.ttf"),
-          feather: require("../assets/fonts/Feather.ttf"),
-          ionicons: require("../assets/fonts/Ionicons.ttf"),
+          [mciFont]: require("../assets/fonts/MaterialCommunityIcons.ttf"),
+          [featherFont]: require("../assets/fonts/Feather.ttf"),
+          [ioniconsFont]: require("../assets/fonts/Ionicons.ttf"),
         });
+        if (Platform.OS !== "web") {
+          console.log("[FONTS] All fonts loaded. mciFont=" + mciFont,
+            "featherFont=" + featherFont, "ioniconsFont=" + ioniconsFont);
+          console.log("[FONTS] isLoaded:", mciFont + "=" + Font.isLoaded(mciFont),
+            featherFont + "=" + Font.isLoaded(featherFont),
+            ioniconsFont + "=" + Font.isLoaded(ioniconsFont));
+        }
       } catch (e) {
-        console.warn("Font loading error:", e);
+        console.warn("[FONTS] Font loading error:", e);
       } finally {
         setFontsLoaded(true);
       }

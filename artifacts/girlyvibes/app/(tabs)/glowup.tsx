@@ -1,4 +1,4 @@
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { AppIonicons as Ionicons, AppMaterialCommunityIcons as MaterialCommunityIcons } from "@/components/Icons";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import React, { useState } from "react";
@@ -262,7 +262,7 @@ export default function GlowUpScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { data, startGlowUpPlan } = useApp();
-  useLanguage();
+  const { t, l, isRTL } = useLanguage();
   const [expandedPlanId, setExpandedPlanId] = useState<string | null>(null);
 
   const topInset = Platform.OS === "web" ? 67 : insets.top;
