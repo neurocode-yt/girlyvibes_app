@@ -1,0 +1,27 @@
+kind = "mobile"
+previewPath = "/"
+title = "Girly Vibes"
+version = "1.0.0"
+id = "artifacts/girlyvibes"
+router = "expo-domain"
+
+[[integratedSkills]]
+name = "expo"
+version = "1.0.0"
+
+[[services]]
+ensurePreviewReachable = "/status"
+name = "expo"
+paths = [ "/" ]
+localPort = 18437
+
+[services.development]
+run = "pnpm --filter @workspace/girlyvibes run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/girlyvibes", "run", "build" ]
+run = [ "pnpm", "--filter", "@workspace/girlyvibes", "run", "serve" ]
+
+[services.env]
+PORT = "18437"
+BASE_PATH = "/"
