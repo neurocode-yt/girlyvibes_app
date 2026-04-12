@@ -21,6 +21,7 @@
       "bundleIdentifier": "com.girlyvibes.app"
     },
     "android": {
+      "package": "com.girlyvibes.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icon.png",
         "backgroundColor": "#FBE4EC"
