@@ -42,6 +42,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "0a4a34ef-be6e-481f-9e5d-540aa134bc79"
+      }
+    },
+    "owner": "neurocoode"
   }
 }
