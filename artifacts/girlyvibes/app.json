@@ -34,7 +34,15 @@
           "origin": "https://replit.com/"
         }
       ],
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow Girly Vibes to save photos to your gallery.",
+          "savePhotosPermission": "Allow Girly Vibes to save photos to your gallery.",
+          "isAccessMediaLocationEnabled": true
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

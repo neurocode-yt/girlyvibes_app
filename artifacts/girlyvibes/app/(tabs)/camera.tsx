@@ -72,8 +72,10 @@ export default function CameraTab() {
         quality: 0.5,
       });
       if (!result.canceled && result.assets[0]) {
-        setPhotoUri(result.assets[0].uri);
+        const uri = result.assets[0].uri;
+        setPhotoUri(uri);
         setSelectedFilter("normal");
+        logPhoto(uri, "Normal");
       }
       return;
     }
@@ -92,8 +94,10 @@ export default function CameraTab() {
     });
 
     if (!result.canceled && result.assets[0]) {
-      setPhotoUri(result.assets[0].uri);
+      const uri = result.assets[0].uri;
+      setPhotoUri(uri);
       setSelectedFilter("normal");
+      logPhoto(uri, "Normal");
     }
   };
 
@@ -111,12 +115,8 @@ export default function CameraTab() {
           return;
         }
         await MediaLibrary.saveToLibraryAsync(photoUri);
+        Alert.alert("", t.camera.saveSuccess);
       }
-
-      const filterLabel = getFilterLabel(selectedFilter, t);
-      await logPhoto(photoUri, filterLabel);
-
-      Alert.alert("", t.camera.saveSuccess);
     } catch {
       Alert.alert("", t.camera.saveError);
     } finally {
