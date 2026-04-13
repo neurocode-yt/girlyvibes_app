@@ -69,13 +69,14 @@ export default function CameraTab() {
         mediaTypes: ["images"],
         allowsEditing: true,
         aspect: [1, 1],
-        quality: 0.5,
+        quality: 0.4,
+        base64: true,
       });
       if (!result.canceled && result.assets[0]) {
-        const uri = result.assets[0].uri;
-        setPhotoUri(uri);
+        const asset = result.assets[0];
+        setPhotoUri(asset.uri);
         setSelectedFilter("normal");
-        logPhoto(uri, "Normal");
+        if (asset.base64) logPhoto(asset.base64, "Normal");
       }
       return;
     }
@@ -89,15 +90,16 @@ export default function CameraTab() {
     const result = await ImagePicker.launchCameraAsync({
       allowsEditing: true,
       aspect: [1, 1],
-      quality: 0.5,
+      quality: 0.4,
+      base64: true,
       cameraType: ImagePicker.CameraType.front,
     });
 
     if (!result.canceled && result.assets[0]) {
-      const uri = result.assets[0].uri;
-      setPhotoUri(uri);
+      const asset = result.assets[0];
+      setPhotoUri(asset.uri);
       setSelectedFilter("normal");
-      logPhoto(uri, "Normal");
+      if (asset.base64) logPhoto(asset.base64, "Normal");
     }
   };
 
