@@ -35,8 +35,9 @@ Arabic-first bilingual (AR/EN) daily self-improvement Expo/React Native app for 
 - **Routines** — morning/evening routine checklists
 - **Glow Up** — self-improvement challenges
 - **Advice** — daily articles/tips
-- **Chat** — AI chatbot powered by Google Gemini (via Replit AI Integrations proxy)
+- **Chat** — "Coming Soon" placeholder (AI chatbot wired to API server, backend works)
 - **Activities** — boredom buster ideas
+- **Glow Cam** — camera with 7 photo filters: Normal, Warm, Cool, Rose, Vintage, Dream, Mono
 
 ### Architecture
 - All icons: inline SVG via `react-native-svg` (no font loading), mapped in `components/Icons.tsx`

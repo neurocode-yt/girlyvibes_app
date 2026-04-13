@@ -1,6 +1,6 @@
 import { BlurView } from "expo-blur";
 import { Tabs } from "expo-router";
-import { AppFeather as Feather, AppIonicons as Ionicons, AppMaterialCommunityIcons as MaterialCommunityIcons } from "@/components/Icons";
+import { AppFeather as Feather, AppIonicons as Ionicons, AppMaterialCommunityIcons as MaterialCommunityIcons, AppMaterialCommunityIcons as MaterialIcons } from "@/components/Icons";
 import React from "react";
 import { Platform, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -103,6 +103,15 @@ export default function TabLayout() {
           title: t.tabs.boredom,
           tabBarIcon: ({ color }) => (
             <MaterialCommunityIcons name="dice-5-outline" size={21} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="camera"
+        options={{
+          title: t.tabs.camera,
+          tabBarIcon: ({ color }) => (
+            <MaterialIcons name="camera-outline" size={21} color={color} />
           ),
         }}
       />
