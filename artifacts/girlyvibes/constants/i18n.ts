@@ -107,6 +107,10 @@ export const AR = {
     filterDream: "حلمي",
     filterMono: "أحادي",
     permissionDenied: "يلزم إذن الكاميرا لالتقاط الصور",
+    savePhoto: "حفظ الصورة 💾",
+    saveSuccess: "تم الحفظ في الاستوديو! 🌸",
+    saveError: "تعذّر حفظ الصورة",
+    savePermission: "يلزم إذن للوصول إلى الصور",
   },
 };
 
@@ -217,6 +221,10 @@ export const EN = {
     filterDream: "Dream",
     filterMono: "Mono",
     permissionDenied: "Camera permission is needed to take photos",
+    savePhoto: "Save Photo 💾",
+    saveSuccess: "Saved to your gallery! 🌸",
+    saveError: "Could not save the photo",
+    savePermission: "Gallery permission is needed to save photos",
   },
 };
 

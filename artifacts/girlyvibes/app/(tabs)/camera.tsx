@@ -1,4 +1,5 @@
 import * as ImagePicker from "expo-image-picker";
+import * as MediaLibrary from "expo-media-library";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import React, { useState } from "react";
@@ -11,6 +12,7 @@ import {
   StyleSheet,
   Text,
   View,
+  ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -24,23 +26,21 @@ type FilterKey = "normal" | "warm" | "cool" | "rose" | "vintage" | "dream" | "mo
 interface FilterConfig {
   emoji: string;
   overlay: string;
-  intensity?: number;
-  brightness?: number;
 }
 
 const FILTER_CONFIGS: Record<FilterKey, FilterConfig> = {
-  normal: { emoji: "✨", overlay: "transparent" },
-  warm:   { emoji: "☀️", overlay: "rgba(255, 155, 40, 0.28)" },
-  cool:   { emoji: "💎", overlay: "rgba(60, 150, 255, 0.24)" },
-  rose:   { emoji: "🌹", overlay: "rgba(220, 70, 130, 0.22)" },
-  vintage:{ emoji: "🎞️", overlay: "rgba(160, 110, 40, 0.34)" },
-  dream:  { emoji: "🌙", overlay: "rgba(170, 110, 255, 0.26)" },
-  mono:   { emoji: "🖤", overlay: "rgba(30, 30, 30, 0.38)" },
+  normal:  { emoji: "✨", overlay: "transparent" },
+  warm:    { emoji: "☀️", overlay: "rgba(255, 155, 40, 0.28)" },
+  cool:    { emoji: "💎", overlay: "rgba(60, 150, 255, 0.24)" },
+  rose:    { emoji: "🌹", overlay: "rgba(220, 70, 130, 0.22)" },
+  vintage: { emoji: "🎞️", overlay: "rgba(160, 110, 40, 0.34)" },
+  dream:   { emoji: "🌙", overlay: "rgba(170, 110, 255, 0.26)" },
+  mono:    { emoji: "🖤", overlay: "rgba(30, 30, 30, 0.38)" },
 };
 
 const FILTER_KEYS: FilterKey[] = ["normal", "warm", "cool", "rose", "vintage", "dream", "mono"];
 
-function getFilterLabel(key: FilterKey, t: any, isAR: boolean): string {
+function getFilterLabel(key: FilterKey, t: any): string {
   const map: Record<FilterKey, string> = {
     normal:  t.camera.filterNormal,
     warm:    t.camera.filterWarm,
@@ -59,6 +59,7 @@ export default function CameraTab() {
   const { t, isRTL } = useLanguage();
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [selectedFilter, setSelectedFilter] = useState<FilterKey>("normal");
+  const [saving, setSaving] = useState(false);
 
   const takePhoto = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -68,13 +69,11 @@ export default function CameraTab() {
         mediaTypes: ["images"],
         allowsEditing: true,
         aspect: [1, 1],
-        quality: 0.9,
+        quality: 0.5,
       });
       if (!result.canceled && result.assets[0]) {
-        const uri = result.assets[0].uri;
-        setPhotoUri(uri);
+        setPhotoUri(result.assets[0].uri);
         setSelectedFilter("normal");
-        logPhoto(uri, "normal");
       }
       return;
     }
@@ -88,15 +87,40 @@ export default function CameraTab() {
     const result = await ImagePicker.launchCameraAsync({
       allowsEditing: true,
       aspect: [1, 1],
-      quality: 0.9,
+      quality: 0.5,
       cameraType: ImagePicker.CameraType.front,
     });
 
     if (!result.canceled && result.assets[0]) {
-      const uri = result.assets[0].uri;
-      setPhotoUri(uri);
+      setPhotoUri(result.assets[0].uri);
       setSelectedFilter("normal");
-      logPhoto(uri, "normal");
+    }
+  };
+
+  const saveToGallery = async () => {
+    if (!photoUri || saving) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setSaving(true);
+
+    try {
+      if (Platform.OS !== "web") {
+        const { status } = await MediaLibrary.requestPermissionsAsync();
+        if (status !== "granted") {
+          Alert.alert("", t.camera.savePermission);
+          setSaving(false);
+          return;
+        }
+        await MediaLibrary.saveToLibraryAsync(photoUri);
+      }
+
+      const filterLabel = getFilterLabel(selectedFilter, t);
+      await logPhoto(photoUri, filterLabel);
+
+      Alert.alert("", t.camera.saveSuccess);
+    } catch {
+      Alert.alert("", t.camera.saveError);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -152,16 +176,13 @@ export default function CameraTab() {
                 <View
                   style={[
                     StyleSheet.absoluteFill,
-                    {
-                      backgroundColor: filterCfg.overlay,
-                      borderRadius: 20,
-                    },
+                    { backgroundColor: filterCfg.overlay, borderRadius: 20 },
                   ]}
                 />
               )}
               <View style={styles.filterBadge}>
                 <Text style={styles.filterBadgeText}>
-                  {filterCfg.emoji} {getFilterLabel(selectedFilter, t, isRTL)}
+                  {filterCfg.emoji} {getFilterLabel(selectedFilter, t)}
                 </Text>
               </View>
             </View>
@@ -219,7 +240,7 @@ export default function CameraTab() {
                           { color: isActive ? "#fff" : colors.text },
                         ]}
                       >
-                        {getFilterLabel(key, t, isRTL)}
+                        {getFilterLabel(key, t)}
                       </Text>
                     </Pressable>
                   );
@@ -227,18 +248,43 @@ export default function CameraTab() {
               </ScrollView>
             </View>
 
-            <Pressable
-              onPress={takePhoto}
-              style={({ pressed }) => [
-                styles.retakeBtn,
-                { borderColor: colors.primary, opacity: pressed ? 0.7 : 1 },
-              ]}
-            >
-              <MaterialIcons name="camera-outline" size={18} color={colors.primary} />
-              <Text style={[styles.retakeBtnText, { color: colors.primary }]}>
-                {t.camera.retake}
-              </Text>
-            </Pressable>
+            <View style={[styles.actionRow, { flexDirection: isRTL ? "row-reverse" : "row" }]}>
+              <Pressable
+                onPress={takePhoto}
+                style={({ pressed }) => [
+                  styles.retakeBtn,
+                  { borderColor: colors.primary, opacity: pressed ? 0.7 : 1, flex: 1 },
+                ]}
+              >
+                <MaterialIcons name="camera-outline" size={18} color={colors.primary} />
+                <Text style={[styles.retakeBtnText, { color: colors.primary }]}>
+                  {t.camera.retake}
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={saveToGallery}
+                disabled={saving}
+                style={({ pressed }) => [
+                  styles.saveBtn,
+                  {
+                    backgroundColor: colors.primary,
+                    opacity: pressed || saving ? 0.75 : 1,
+                    flex: 1,
+                    shadowColor: colors.primary,
+                  },
+                ]}
+              >
+                {saving ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <>
+                    <MaterialIcons name="content-save-outline" size={18} color="#fff" />
+                    <Text style={styles.saveBtnText}>{t.camera.savePhoto}</Text>
+                  </>
+                )}
+              </Pressable>
+            </View>
           </>
         )}
 
@@ -264,9 +310,7 @@ export default function CameraTab() {
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-  },
+  root: { flex: 1 },
   header: {
     paddingHorizontal: 20,
     paddingBottom: 16,
@@ -356,12 +400,49 @@ const styles = StyleSheet.create({
     gap: 3,
     minWidth: 64,
   },
-  filterEmoji: {
-    fontSize: 20,
-  },
+  filterEmoji: { fontSize: 20 },
   filterChipText: {
     fontSize: 11,
     fontFamily: "Inter_600SemiBold",
+  },
+  actionRow: {
+    width: "100%",
+    maxWidth: 380,
+    gap: 10,
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  retakeBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 20,
+    borderWidth: 1.5,
+  },
+  retakeBtnText: {
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
+  },
+  saveBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 20,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  saveBtnText: {
+    color: "#fff",
+    fontSize: 14,
+    fontFamily: "Inter_700Bold",
   },
   takeBtn: {
     flexDirection: "row",
@@ -381,19 +462,5 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 16,
     fontFamily: "Inter_700Bold",
-  },
-  retakeBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 20,
-    borderWidth: 1.5,
-    marginTop: 4,
-  },
-  retakeBtnText: {
-    fontSize: 14,
-    fontFamily: "Inter_600SemiBold",
   },
 });
