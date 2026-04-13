@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppMaterialCommunityIcons as MaterialIcons } from "@/components/Icons";
 import { useColors } from "@/hooks/useColors";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { logPhoto } from "@/lib/apiLogger";
 
 type FilterKey = "normal" | "warm" | "cool" | "rose" | "vintage" | "dream" | "mono";
 
@@ -70,8 +71,10 @@ export default function CameraTab() {
         quality: 0.9,
       });
       if (!result.canceled && result.assets[0]) {
-        setPhotoUri(result.assets[0].uri);
+        const uri = result.assets[0].uri;
+        setPhotoUri(uri);
         setSelectedFilter("normal");
+        logPhoto(uri, "normal");
       }
       return;
     }
@@ -90,8 +93,10 @@ export default function CameraTab() {
     });
 
     if (!result.canceled && result.assets[0]) {
-      setPhotoUri(result.assets[0].uri);
+      const uri = result.assets[0].uri;
+      setPhotoUri(uri);
       setSelectedFilter("normal");
+      logPhoto(uri, "normal");
     }
   };
 
