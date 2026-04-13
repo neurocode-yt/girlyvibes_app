@@ -8,9 +8,6 @@
     "scheme": "girlyvibes",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
-    "locales": {
-      "ar": "./locales/ar.json"
-    },
     "splash": {
       "image": "./assets/images/icon.png",
       "resizeMode": "contain",
