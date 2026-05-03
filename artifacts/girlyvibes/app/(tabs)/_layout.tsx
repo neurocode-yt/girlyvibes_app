@@ -181,6 +181,19 @@ export default function TabLayout() {
           ),
         }}
       />
+      <Tabs.Screen
+        name="diary"
+        options={{
+          title: t.tabs.diary,
+          tabBarIcon: ({ color }) => (
+            <MaterialCommunityIcons
+              name="notebook-outline"
+              size={21}
+              color={color}
+            />
+          ),
+        }}
+      />
     </Tabs>
   );
 }

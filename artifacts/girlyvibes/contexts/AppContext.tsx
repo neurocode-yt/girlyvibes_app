@@ -27,6 +27,14 @@ interface DetoxChallenge {
   checkedInDays: string[];
 }
 
+export interface DiaryEntry {
+  id: string;        // date key YYYY-MM-DD
+  mood: string;      // mood key e.g. "happy"
+  moodEmoji: string; // the actual emoji
+  note: string;
+  cardColor: string; // hex
+}
+
 interface AppData {
   streak: number;
   lastStreakDate: string | null;
@@ -37,11 +45,14 @@ interface AppData {
   favoriteAdvice: string[];
   profileName: string;
   profilePhoto: string | null;
+  diaryEntries: { [dateKey: string]: DiaryEntry };
 }
 
 interface AppContextType {
   data: AppData;
   updateProfile: (name: string, photo: string | null) => Promise<void>;
+  saveDiaryEntry: (entry: DiaryEntry) => Promise<void>;
+  deleteDiaryEntry: (dateKey: string) => Promise<void>;
   toggleRoutineStep: (routineId: string, stepId: string) => Promise<void>;
   isStepCompleted: (routineId: string, stepId: string) => boolean;
   getRoutineCompletionPercent: (routineId: string, totalSteps: number) => number;
@@ -77,6 +88,7 @@ const DEFAULT_DATA: AppData = {
   favoriteAdvice: [],
   profileName: "",
   profilePhoto: null,
+  diaryEntries: {},
 };
 
 const AppContext = createContext<AppContextType | null>(null);
@@ -274,11 +286,32 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [data]
   );
 
+  const saveDiaryEntry = useCallback(
+    async (entry: DiaryEntry) => {
+      await save({
+        ...data,
+        diaryEntries: { ...data.diaryEntries, [entry.id]: entry },
+      });
+    },
+    [data, save]
+  );
+
+  const deleteDiaryEntry = useCallback(
+    async (dateKey: string) => {
+      const updated = { ...data.diaryEntries };
+      delete updated[dateKey];
+      await save({ ...data, diaryEntries: updated });
+    },
+    [data, save]
+  );
+
   return (
     <AppContext.Provider
       value={{
         data,
         updateProfile,
+        saveDiaryEntry,
+        deleteDiaryEntry,
         toggleRoutineStep,
         isStepCompleted,
         getRoutineCompletionPercent,
