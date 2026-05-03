@@ -4,13 +4,14 @@ import { useColors } from "@/hooks/useColors";
 import { useLanguage } from "@/contexts/LanguageContext";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
-import React, { useState, useRef, useEffect, useMemo } from "react";
+import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import {
   Alert,
   Animated,
   Dimensions,
   KeyboardAvoidingView,
   Modal,
+  PanResponder,
   Platform,
   Pressable,
   ScrollView,
@@ -572,6 +573,63 @@ function blockFontFamily(block: RichBlock): string {
   return "Inter_400Regular";
 }
 
+// ─── Emoji helpers ─────────────────────────────────────────────────────────────
+
+function containsEmoji(text: string): boolean {
+  try {
+    return /\p{Extended_Pictographic}/u.test(text);
+  } catch {
+    return /[\uD800-\uDBFF][\uDC00-\uDFFF]|[\u2600-\u27FF]/u.test(text);
+  }
+}
+
+const EMOJI_SLIDER_TRACK = 160;
+const EMOJI_SCALE_MIN = 1.0;
+const EMOJI_SCALE_MAX = 3.0;
+
+function EmojiSizeSlider({
+  value, onChange, onRelease,
+}: { value: number; onChange: (v: number) => void; onRelease: () => void }) {
+  const startVal = useRef(value);
+  const valueRef = useRef(value);
+  const onChangeRef = useRef(onChange);
+  const onReleaseRef = useRef(onRelease);
+  valueRef.current = value;
+  onChangeRef.current = onChange;
+  onReleaseRef.current = onRelease;
+
+  const pan = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => { startVal.current = valueRef.current; },
+      onPanResponderMove: (_, g) => {
+        const delta = (g.dx / EMOJI_SLIDER_TRACK) * (EMOJI_SCALE_MAX - EMOJI_SCALE_MIN);
+        const v = Math.max(EMOJI_SCALE_MIN, Math.min(EMOJI_SCALE_MAX, startVal.current + delta));
+        onChangeRef.current(Math.round(v * 10) / 10);
+      },
+      onPanResponderRelease: () => { onReleaseRef.current(); },
+    })
+  ).current;
+
+  const pct = (value - EMOJI_SCALE_MIN) / (EMOJI_SCALE_MAX - EMOJI_SCALE_MIN);
+  const thumbX = Math.max(0, Math.min(pct * EMOJI_SLIDER_TRACK - 10, EMOJI_SLIDER_TRACK - 20));
+
+  return (
+    <View style={tbStyles.emojiRow}>
+      <Text style={{ fontSize: 13 }}>😊</Text>
+      <View style={tbStyles.emojiTrackWrap} {...pan.panHandlers}>
+        <View style={tbStyles.emojiTrack}>
+          <View style={[tbStyles.emojiFill, { width: pct * EMOJI_SLIDER_TRACK }]} />
+        </View>
+        <View style={[tbStyles.emojiThumb, { left: thumbX }]} />
+      </View>
+      <Text style={{ fontSize: Math.round(13 + 22 * pct) }}>😊</Text>
+      <Text style={tbStyles.emojiScaleLabel}>{value.toFixed(1)}×</Text>
+    </View>
+  );
+}
+
 // ─ Single block text input ────────────────────────────────────────────────────
 
 function RichBlockInput({
@@ -623,25 +681,43 @@ function RichBlockInput({
 // ─ Formatting toolbar ─────────────────────────────────────────────────────────
 
 function FormattingToolbar({
-  activeBlock, onUpdateBlock, noteColor, onNoteColorChange,
+  activeBlock, onUpdateBlock, noteColor, onNoteColorChange, onRefocus, hasEmoji, emojiScale, onEmojiScale,
 }: {
   activeBlock: RichBlock | null;
   onUpdateBlock: (u: Partial<RichBlock>) => void;
   noteColor: string;
   onNoteColorChange: (c: string) => void;
+  onRefocus: () => void;
+  hasEmoji: boolean;
+  emojiScale: number;
+  onEmojiScale: (s: number) => void;
 }) {
   const insets = useSafeAreaInsets();
   const b = activeBlock;
   if (!b) return null;
 
-  const Btn = ({ label, active, onPress, extraTextStyle }: { label: string; active: boolean; onPress: () => void; extraTextStyle?: object }) => (
-    <Pressable style={[tbStyles.btn, active && tbStyles.btnOn]} onPress={onPress}>
+  const Btn = ({ label, active, onPress, extraTextStyle }: {
+    label: string; active: boolean; onPress: () => void; extraTextStyle?: object;
+  }) => (
+    <Pressable
+      style={[tbStyles.btn, active && tbStyles.btnOn]}
+      onPress={() => { onPress(); onRefocus(); }}
+    >
       <Text style={[tbStyles.btnTxt, active && tbStyles.btnTxtOn, extraTextStyle]}>{label}</Text>
     </Pressable>
   );
 
   return (
     <View style={[tbStyles.container, { paddingBottom: Math.max(insets.bottom, 8) }]}>
+      {/* Emoji size slider — shows when block contains emoji */}
+      {hasEmoji && (
+        <EmojiSizeSlider
+          value={emojiScale}
+          onChange={(s) => onEmojiScale(s)}
+          onRelease={onRefocus}
+        />
+      )}
+
       {/* Row 1 — type + inline + font */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="always" contentContainerStyle={tbStyles.row}>
         {(["h1","h2","h3","body","small"] as const).map(tp => (
@@ -652,26 +728,33 @@ function FormattingToolbar({
         <Btn label="I" active={b.italic}    onPress={() => onUpdateBlock({ italic: !b.italic })}       extraTextStyle={{ fontStyle: "italic" }} />
         <Btn label="U" active={b.underline} onPress={() => onUpdateBlock({ underline: !b.underline })} extraTextStyle={{ textDecorationLine: "underline" }} />
         <View style={tbStyles.sep} />
-        {(["sans","serif","mono"] as const).map(fs => (
-          <Btn key={fs}
-            label={fs === "sans" ? "Aa" : fs === "serif" ? "Tf" : "{}"}
-            active={b.fontStyle === fs}
-            onPress={() => onUpdateBlock({ fontStyle: fs })}
-            extraTextStyle={fs === "serif" ? { fontFamily: Platform.OS === "ios" ? "Georgia" : "serif" } : fs === "mono" ? { fontFamily: Platform.OS === "ios" ? "Courier New" : "monospace" } : {}}
-          />
-        ))}
+        <Btn label="Aa" active={b.fontStyle === "sans"} onPress={() => onUpdateBlock({ fontStyle: "sans" })} />
+        <Btn
+          label="Tf"
+          active={b.fontStyle === "serif"}
+          onPress={() => onUpdateBlock({ fontStyle: "serif" })}
+          extraTextStyle={{ fontFamily: Platform.select({ ios: "Georgia", android: "serif", default: "Georgia, serif" }) ?? "serif" }}
+        />
+        <Btn
+          label="{}"
+          active={b.fontStyle === "mono"}
+          onPress={() => onUpdateBlock({ fontStyle: "mono" })}
+          extraTextStyle={{ fontFamily: Platform.select({ ios: "Courier New", android: "monospace", default: "Courier New, monospace" }) ?? "monospace" }}
+        />
       </ScrollView>
 
       {/* Row 2 — text colors + card bg colors */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="always" contentContainerStyle={tbStyles.colorRow}>
         <Text style={tbStyles.colorLabel}>A</Text>
         {RICH_TEXT_COLORS.map(c => (
-          <Pressable key={c} style={[tbStyles.dot, { backgroundColor: c }, b.color === c && tbStyles.dotActive]} onPress={() => { Haptics.selectionAsync(); onUpdateBlock({ color: c }); }} />
+          <Pressable key={c} style={[tbStyles.dot, { backgroundColor: c }, b.color === c && tbStyles.dotActive]}
+            onPress={() => { Haptics.selectionAsync(); onUpdateBlock({ color: c }); onRefocus(); }} />
         ))}
         <View style={tbStyles.sep} />
         <Text style={tbStyles.colorLabel}>🎨</Text>
         {NOTE_COLORS.map(c => (
-          <Pressable key={c} style={[tbStyles.dot, { backgroundColor: c }, noteColor === c && tbStyles.dotActive]} onPress={() => { Haptics.selectionAsync(); onNoteColorChange(c); }} />
+          <Pressable key={c} style={[tbStyles.dot, { backgroundColor: c }, noteColor === c && tbStyles.dotActive]}
+            onPress={() => { Haptics.selectionAsync(); onNoteColorChange(c); onRefocus(); }} />
         ))}
       </ScrollView>
     </View>
@@ -690,6 +773,13 @@ const tbStyles = StyleSheet.create({
   colorLabel: { fontSize: 11, fontFamily: "Inter_700Bold", color: "#999", width: 14, textAlign: "center" },
   dot: { width: 24, height: 24, borderRadius: 12 },
   dotActive: { borderWidth: 3, borderColor: "#333" },
+  // Emoji slider
+  emojiRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 12, height: 42, gap: 8, borderTopWidth: 1, borderTopColor: "rgba(0,0,0,0.05)" },
+  emojiTrackWrap: { width: EMOJI_SLIDER_TRACK, height: 24, justifyContent: "center", position: "relative" },
+  emojiTrack: { height: 4, backgroundColor: "rgba(0,0,0,0.1)", borderRadius: 2 },
+  emojiFill: { height: 4, backgroundColor: "#FF6B9D", borderRadius: 2 },
+  emojiThumb: { position: "absolute", top: 2, width: 20, height: 20, borderRadius: 10, backgroundColor: "#FF6B9D", borderWidth: 2, borderColor: "#fff" },
+  emojiScaleLabel: { fontSize: 11, fontFamily: "Inter_600SemiBold", color: "#888", minWidth: 30 },
 });
 
 // ─ Modal ─────────────────────────────────────────────────────────────────────
@@ -723,8 +813,21 @@ function NoteEditorModal({
     }
   }, [visible, initialNote?.id]);
 
+  // Keep a ref so refocusActive can always read the latest activeId
+  const activeIdRef = useRef("");
+  activeIdRef.current = activeId;
+
+  const refocusActive = useCallback(() => {
+    setTimeout(() => {
+      const id = activeIdRef.current;
+      if (id) blockRefs.current[id]?.focus();
+    }, 50);
+  }, []);
+
   const activeBlock = blocks.find((b) => b.id === activeId) ?? null;
   const hasContent = blocks.some((b) => b.text.trim());
+  const hasEmojiInBlock = containsEmoji(activeBlock?.text ?? "");
+  const emojiScale = activeBlock?.emojiScale ?? 1.0;
 
   const updateBlock = (id: string, updates: Partial<RichBlock>) =>
     setBlocks((prev) => prev.map((b) => (b.id === id ? { ...b, ...updates } : b)));
@@ -812,6 +915,10 @@ function NoteEditorModal({
             onUpdateBlock={(u) => activeId && updateBlock(activeId, u)}
             noteColor={noteColor}
             onNoteColorChange={setNoteColor}
+            onRefocus={refocusActive}
+            hasEmoji={hasEmojiInBlock}
+            emojiScale={emojiScale}
+            onEmojiScale={(s) => activeId && updateBlock(activeId, { emojiScale: s })}
           />
         </KeyboardAvoidingView>
       </View>
@@ -827,6 +934,43 @@ const editorStyles = StyleSheet.create({
   saveBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
   saveBtnTxt: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
 });
+
+// ─── Emoji-aware text renderer (for note card preview) ───────────────────────
+
+function EmojiText({ text, style, emojiScale, numberOfLines }: {
+  text: string; style: object; emojiScale: number; numberOfLines?: number;
+}) {
+  const segments = useMemo(() => {
+    const res: Array<{ t: string; isEmoji: boolean }> = [];
+    try {
+      const re = /\p{Extended_Pictographic}/gu;
+      let lastIdx = 0;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(text)) !== null) {
+        if (m.index > lastIdx) res.push({ t: text.slice(lastIdx, m.index), isEmoji: false });
+        res.push({ t: m[0], isEmoji: true });
+        lastIdx = re.lastIndex;
+      }
+      if (lastIdx < text.length) res.push({ t: text.slice(lastIdx), isEmoji: false });
+    } catch {
+      res.push({ t: text, isEmoji: false });
+    }
+    return res;
+  }, [text]);
+
+  const baseFontSize = (style as any).fontSize ?? 16;
+  return (
+    <Text numberOfLines={numberOfLines} style={style}>
+      {segments.map((s, i) =>
+        s.isEmoji ? (
+          <Text key={i} style={{ fontSize: Math.min(baseFontSize * emojiScale, 72) }}>{s.t}</Text>
+        ) : (
+          <Text key={i}>{s.t}</Text>
+        )
+      )}
+    </Text>
+  );
+}
 
 // ─── Note card (pressable → opens editor) ────────────────────────────────────
 
@@ -848,22 +992,21 @@ function NoteCard({
           {rich.slice(0, 5).map((block, i) => {
             const sz = BLOCK_SIZES[block.type];
             const previewSize = Math.min(sz.fontSize, 17);
-            return (
-              <Text
-                key={block.id}
-                numberOfLines={i === 0 && block.type !== "body" ? 1 : 2}
-                style={{
-                  fontSize: previewSize,
-                  lineHeight: previewSize * 1.5,
-                  fontFamily: blockFontFamily(block),
-                  fontStyle: block.italic ? "italic" : "normal",
-                  textDecorationLine: block.underline ? "underline" : "none",
-                  color: block.color,
-                  textAlign: isRTL ? "right" : "left",
-                }}
-              >
-                {block.text}
-              </Text>
+            const blockStyle = {
+              fontSize: previewSize,
+              lineHeight: previewSize * 1.5,
+              fontFamily: blockFontFamily(block),
+              fontStyle: block.italic ? "italic" : "normal" as const,
+              textDecorationLine: block.underline ? "underline" : "none" as const,
+              color: block.color,
+              textAlign: isRTL ? "right" : "left" as const,
+            };
+            const scale = block.emojiScale ?? 1;
+            const nLines = i === 0 && block.type !== "body" ? 1 : 2;
+            return scale > 1 && containsEmoji(block.text) ? (
+              <EmojiText key={block.id} text={block.text} style={blockStyle} emojiScale={scale} numberOfLines={nLines} />
+            ) : (
+              <Text key={block.id} numberOfLines={nLines} style={blockStyle}>{block.text}</Text>
             );
           })}
         </View>

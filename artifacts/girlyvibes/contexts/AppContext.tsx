@@ -44,6 +44,7 @@ export interface RichBlock {
   underline: boolean;
   color: string;
   fontStyle: 'sans' | 'serif' | 'mono';
+  emojiScale?: number; // 1.0–3.0, default 1
 }
 
 export interface DiaryNote {
