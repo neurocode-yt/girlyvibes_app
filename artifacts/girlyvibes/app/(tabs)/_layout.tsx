@@ -5,44 +5,61 @@ import {
   AppIonicons as Ionicons,
   AppMaterialCommunityIcons as MaterialCommunityIcons,
 } from "@/components/Icons";
-import React from "react";
-import { Platform, Pressable, StyleSheet, View } from "react-native";
+import React, { useRef } from "react";
+import {
+  Animated,
+  Platform,
+  Pressable,
+  StyleSheet,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-} from "react-native-reanimated";
 
 import { useColors } from "@/hooks/useColors";
 import { useLanguage } from "@/contexts/LanguageContext";
 
 function AnimatedTabButton(props: any) {
-  const scale = useSharedValue(1);
+  const scale = useRef(new Animated.Value(1)).current;
 
-  const animStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-    flex: 1,
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-  }));
+  const handlePressIn = () => {
+    Animated.spring(scale, {
+      toValue: 0.78,
+      useNativeDriver: true,
+      speed: 26,
+      bounciness: 0,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(scale, {
+      toValue: 1,
+      useNativeDriver: true,
+      speed: 18,
+      bounciness: 8,
+    }).start();
+  };
 
   return (
     <Pressable
       onPress={props.onPress}
       onLongPress={props.onLongPress}
-      onPressIn={() => {
-        scale.value = withSpring(0.78, { damping: 10, stiffness: 260 });
-      }}
-      onPressOut={() => {
-        scale.value = withSpring(1, { damping: 6, stiffness: 180 });
-      }}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
       accessibilityLabel={props.accessibilityLabel}
       accessibilityRole={props.accessibilityRole}
       accessibilityState={props.accessibilityState}
       style={[props.style, { overflow: "hidden" }]}
     >
-      <Animated.View style={animStyle}>{props.children}</Animated.View>
+      <Animated.View
+        style={{
+          flex: 1,
+          alignItems: "center",
+          justifyContent: "center",
+          transform: [{ scale }],
+        }}
+      >
+        {props.children}
+      </Animated.View>
     </Pressable>
   );
 }
