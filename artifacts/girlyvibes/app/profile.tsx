@@ -74,11 +74,15 @@ export default function ProfileScreen() {
         style={[styles.header, { paddingTop: topInset + 12 }]}
       >
         <View style={[styles.navRow, { flexDirection: isRTL ? "row-reverse" : "row" }]}>
-          <Pressable onPress={() => router.back()} hitSlop={12}>
+          <Pressable
+            onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)")}
+            hitSlop={12}
+            style={[styles.backBtn, { backgroundColor: colors.highlight }]}
+          >
             <MaterialCommunityIcons
               name={isRTL ? "arrow-right" : "arrow-left"}
-              size={24}
-              color={colors.foreground}
+              size={20}
+              color={colors.primary}
             />
           </Pressable>
           <Text style={[styles.headerTitle, { color: colors.foreground }]}>
@@ -229,6 +233,7 @@ const styles = StyleSheet.create({
   header: { paddingHorizontal: 20, paddingBottom: 24 },
   navRow: { alignItems: "center", justifyContent: "space-between", marginBottom: 20 },
   navActions: { flexDirection: "row", alignItems: "center", gap: 10 },
+  backBtn: { width: 34, height: 34, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   settingsBtn: { width: 34, height: 34, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   headerTitle: { fontSize: 18, fontFamily: "Inter_600SemiBold" },
   avatarRow: { alignItems: "center" },
