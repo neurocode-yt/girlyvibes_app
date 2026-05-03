@@ -1,5 +1,5 @@
 import { AppMaterialCommunityIcons as Icon } from "@/components/Icons";
-import { DiaryEntry, DiaryNote, useApp } from "@/contexts/AppContext";
+import { DiaryEntry, DiaryNote, RichBlock, useApp } from "@/contexts/AppContext";
 import { useColors } from "@/hooks/useColors";
 import { useLanguage } from "@/contexts/LanguageContext";
 import * as Haptics from "expo-haptics";
@@ -542,196 +542,337 @@ const NOTE_COLORS = [
   "#FFB3BA", "#FFDAC1", "#E2F0CB", "#B5EAD7",
 ];
 
-// ─── Full-screen note editor modal ───────────────────────────────────────────
+// ─── Rich text editor ─────────────────────────────────────────────────────────
+
+const BLOCK_SIZES: Record<RichBlock["type"], { fontSize: number; lineHeight: number }> = {
+  h1:    { fontSize: 28, lineHeight: 38 },
+  h2:    { fontSize: 22, lineHeight: 30 },
+  h3:    { fontSize: 18, lineHeight: 26 },
+  body:  { fontSize: 16, lineHeight: 24 },
+  small: { fontSize: 13, lineHeight: 20 },
+};
+
+const RICH_TEXT_COLORS = [
+  "#222222", "#E01060", "#FF6B00", "#D4A000",
+  "#2E7D32", "#0277BD", "#6A1B9A", "#C2185B",
+  "#00695C", "#546E7A",
+];
+
+let _bc = 0;
+function makeBlock(o?: Partial<RichBlock>): RichBlock {
+  return { id: `b${Date.now()}${++_bc}`, text: "", type: "body", bold: false, italic: false, underline: false, color: "#222222", fontStyle: "sans", ...o };
+}
+
+function blockFontFamily(block: RichBlock): string {
+  if (block.fontStyle === "serif") return Platform.select({ ios: "Georgia", android: "serif", default: "Georgia, serif" }) ?? "serif";
+  if (block.fontStyle === "mono")  return Platform.select({ ios: "Courier New", android: "monospace", default: "Courier New, monospace" }) ?? "monospace";
+  const heading = block.type === "h1" || block.type === "h2";
+  if (block.bold || heading) return "Inter_700Bold";
+  if (block.type === "h3") return "Inter_600SemiBold";
+  return "Inter_400Regular";
+}
+
+// ─ Single block text input ────────────────────────────────────────────────────
+
+function RichBlockInput({
+  block, isActive, onChangeText, onFocus, onEnter, onBackspaceEmpty, inputRef,
+}: {
+  block: RichBlock; isActive: boolean;
+  onChangeText: (id: string, t: string) => void;
+  onFocus: (id: string) => void;
+  onEnter: (id: string, after: string) => void;
+  onBackspaceEmpty: (id: string) => void;
+  inputRef: (r: TextInput | null) => void;
+}) {
+  const sz = BLOCK_SIZES[block.type];
+  return (
+    <TextInput
+      ref={inputRef}
+      style={{
+        fontSize: sz.fontSize,
+        lineHeight: sz.lineHeight,
+        fontFamily: blockFontFamily(block),
+        fontStyle: block.italic ? "italic" : "normal",
+        textDecorationLine: block.underline ? "underline" : "none",
+        color: block.color,
+        paddingHorizontal: 20,
+        paddingVertical: 6,
+        minHeight: sz.lineHeight + 12,
+        opacity: isActive ? 1 : 0.8,
+      }}
+      value={block.text}
+      multiline
+      blurOnSubmit={false}
+      onFocus={() => onFocus(block.id)}
+      onChangeText={(val) => {
+        if (val.includes("\n")) {
+          const [before, ...rest] = val.split("\n");
+          onChangeText(block.id, before);
+          onEnter(block.id, rest.join("\n"));
+        } else {
+          onChangeText(block.id, val);
+        }
+      }}
+      onKeyPress={({ nativeEvent }) => {
+        if (nativeEvent.key === "Backspace" && block.text === "") onBackspaceEmpty(block.id);
+      }}
+    />
+  );
+}
+
+// ─ Formatting toolbar ─────────────────────────────────────────────────────────
+
+function FormattingToolbar({
+  activeBlock, onUpdateBlock, noteColor, onNoteColorChange,
+}: {
+  activeBlock: RichBlock | null;
+  onUpdateBlock: (u: Partial<RichBlock>) => void;
+  noteColor: string;
+  onNoteColorChange: (c: string) => void;
+}) {
+  const insets = useSafeAreaInsets();
+  const b = activeBlock;
+  if (!b) return null;
+
+  const Btn = ({ label, active, onPress, extraTextStyle }: { label: string; active: boolean; onPress: () => void; extraTextStyle?: object }) => (
+    <Pressable style={[tbStyles.btn, active && tbStyles.btnOn]} onPress={onPress}>
+      <Text style={[tbStyles.btnTxt, active && tbStyles.btnTxtOn, extraTextStyle]}>{label}</Text>
+    </Pressable>
+  );
+
+  return (
+    <View style={[tbStyles.container, { paddingBottom: Math.max(insets.bottom, 8) }]}>
+      {/* Row 1 — type + inline + font */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="always" contentContainerStyle={tbStyles.row}>
+        {(["h1","h2","h3","body","small"] as const).map(tp => (
+          <Btn key={tp} label={tp === "body" ? "¶" : tp === "small" ? "sm" : tp.toUpperCase()} active={b.type === tp} onPress={() => onUpdateBlock({ type: tp })} />
+        ))}
+        <View style={tbStyles.sep} />
+        <Btn label="B" active={b.bold}      onPress={() => onUpdateBlock({ bold: !b.bold })}           extraTextStyle={{ fontFamily: "Inter_700Bold" }} />
+        <Btn label="I" active={b.italic}    onPress={() => onUpdateBlock({ italic: !b.italic })}       extraTextStyle={{ fontStyle: "italic" }} />
+        <Btn label="U" active={b.underline} onPress={() => onUpdateBlock({ underline: !b.underline })} extraTextStyle={{ textDecorationLine: "underline" }} />
+        <View style={tbStyles.sep} />
+        {(["sans","serif","mono"] as const).map(fs => (
+          <Btn key={fs}
+            label={fs === "sans" ? "Aa" : fs === "serif" ? "Tf" : "{}"}
+            active={b.fontStyle === fs}
+            onPress={() => onUpdateBlock({ fontStyle: fs })}
+            extraTextStyle={fs === "serif" ? { fontFamily: Platform.OS === "ios" ? "Georgia" : "serif" } : fs === "mono" ? { fontFamily: Platform.OS === "ios" ? "Courier New" : "monospace" } : {}}
+          />
+        ))}
+      </ScrollView>
+
+      {/* Row 2 — text colors + card bg colors */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="always" contentContainerStyle={tbStyles.colorRow}>
+        <Text style={tbStyles.colorLabel}>A</Text>
+        {RICH_TEXT_COLORS.map(c => (
+          <Pressable key={c} style={[tbStyles.dot, { backgroundColor: c }, b.color === c && tbStyles.dotActive]} onPress={() => { Haptics.selectionAsync(); onUpdateBlock({ color: c }); }} />
+        ))}
+        <View style={tbStyles.sep} />
+        <Text style={tbStyles.colorLabel}>🎨</Text>
+        {NOTE_COLORS.map(c => (
+          <Pressable key={c} style={[tbStyles.dot, { backgroundColor: c }, noteColor === c && tbStyles.dotActive]} onPress={() => { Haptics.selectionAsync(); onNoteColorChange(c); }} />
+        ))}
+      </ScrollView>
+    </View>
+  );
+}
+
+const tbStyles = StyleSheet.create({
+  container: { backgroundColor: "rgba(255,255,255,0.92)", borderTopWidth: 1, borderTopColor: "rgba(0,0,0,0.06)" },
+  row: { flexDirection: "row", alignItems: "center", paddingHorizontal: 10, height: 46, gap: 2 },
+  colorRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 10, height: 44, gap: 8 },
+  btn: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, minWidth: 34, alignItems: "center", justifyContent: "center" },
+  btnOn: { backgroundColor: "rgba(0,0,0,0.12)" },
+  btnTxt: { fontSize: 14, fontFamily: "Inter_400Regular", color: "#666" },
+  btnTxtOn: { color: "#111" },
+  sep: { width: 1, height: 24, backgroundColor: "rgba(0,0,0,0.12)", marginHorizontal: 4 },
+  colorLabel: { fontSize: 11, fontFamily: "Inter_700Bold", color: "#999", width: 14, textAlign: "center" },
+  dot: { width: 24, height: 24, borderRadius: 12 },
+  dotActive: { borderWidth: 3, borderColor: "#333" },
+});
+
+// ─ Modal ─────────────────────────────────────────────────────────────────────
 
 function NoteEditorModal({
-  visible,
-  initialNote,
-  onSave,
-  onClose,
+  visible, initialNote, onSave, onClose,
 }: {
   visible: boolean;
   initialNote: DiaryNote | null;
-  onSave: (text: string, color: string) => void;
+  onSave: (text: string, color: string, richContent: RichBlock[]) => void;
   onClose: () => void;
 }) {
   const insets = useSafeAreaInsets();
   const { t, isRTL } = useLanguage();
-  const [text, setText] = useState("");
+  const [blocks, setBlocks] = useState<RichBlock[]>(() => [makeBlock()]);
+  const [activeId, setActiveId] = useState("");
   const [noteColor, setNoteColor] = useState(NOTE_COLORS[0]);
+  const blockRefs = useRef<{ [id: string]: TextInput | null }>({});
 
   useEffect(() => {
-    if (visible) {
-      setText(initialNote?.text ?? "");
-      setNoteColor(initialNote?.color ?? NOTE_COLORS[0]);
+    if (!visible) return;
+    setNoteColor(initialNote?.color ?? NOTE_COLORS[0]);
+    if (initialNote?.richContent?.length) {
+      setBlocks(initialNote.richContent);
+      setActiveId(initialNote.richContent[0].id);
+    } else {
+      const lines = (initialNote?.text ?? "").split("\n").filter(Boolean);
+      const nb = lines.length ? lines.map((l) => makeBlock({ text: l })) : [makeBlock()];
+      setBlocks(nb);
+      setActiveId(nb[0].id);
     }
-  }, [visible, initialNote]);
+  }, [visible, initialNote?.id]);
 
-  const canSave = text.trim().length > 0;
-  const isEditing = !!initialNote;
+  const activeBlock = blocks.find((b) => b.id === activeId) ?? null;
+  const hasContent = blocks.some((b) => b.text.trim());
+
+  const updateBlock = (id: string, updates: Partial<RichBlock>) =>
+    setBlocks((prev) => prev.map((b) => (b.id === id ? { ...b, ...updates } : b)));
+
+  const handleChangeText = (id: string, text: string) => updateBlock(id, { text });
+
+  const handleEnter = (id: string, after: string) => {
+    const src = blocks.find((b) => b.id === id);
+    const nb = makeBlock({
+      type: src?.type === "h1" || src?.type === "h2" ? "body" : src?.type,
+      color: src?.color,
+      fontStyle: src?.fontStyle,
+      text: after,
+    });
+    setBlocks((prev) => {
+      const idx = prev.findIndex((b) => b.id === id);
+      const next = [...prev];
+      next.splice(idx + 1, 0, nb);
+      return next;
+    });
+    setActiveId(nb.id);
+    setTimeout(() => blockRefs.current[nb.id]?.focus(), 30);
+  };
+
+  const handleBackspaceEmpty = (id: string) => {
+    if (blocks.length <= 1) return;
+    const idx = blocks.findIndex((b) => b.id === id);
+    if (idx === 0) return;
+    const prev = blocks[idx - 1];
+    setBlocks((p) => p.filter((b) => b.id !== id));
+    setActiveId(prev.id);
+    setTimeout(() => blockRefs.current[prev.id]?.focus(), 30);
+  };
+
+  const handleSave = () => {
+    const text = blocks.map((b) => b.text).join("\n");
+    onSave(text, noteColor, blocks);
+  };
 
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      statusBarTranslucent
-      onRequestClose={onClose}
-    >
-      <KeyboardAvoidingView
-        style={[editorStyles.root, { backgroundColor: noteColor }]}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-      >
+    <Modal visible={visible} animationType="slide" statusBarTranslucent onRequestClose={onClose}>
+      <View style={[editorStyles.root, { backgroundColor: noteColor }]}>
         {/* Top bar */}
-        <View
-          style={[
-            editorStyles.topBar,
-            {
-              paddingTop: insets.top + 12,
-              flexDirection: isRTL ? "row-reverse" : "row",
-            },
-          ]}
-        >
+        <View style={[editorStyles.topBar, { paddingTop: insets.top + 12, flexDirection: isRTL ? "row-reverse" : "row" }]}>
           <Pressable style={editorStyles.topBtn} onPress={onClose} hitSlop={10}>
             <Icon name="arrow-left" size={22} color="#333" />
           </Pressable>
           <Text style={editorStyles.topTitle}>
-            {isEditing ? t.diary.editEntry : t.diary.addNote}
+            {initialNote ? t.diary.editEntry : t.diary.addNote}
           </Text>
           <Pressable
-            style={[
-              editorStyles.saveTopBtn,
-              { backgroundColor: canSave ? "#33333322" : "#33333308" },
-            ]}
-            onPress={() => canSave && onSave(text.trim(), noteColor)}
-            disabled={!canSave}
+            style={[editorStyles.saveBtn, { backgroundColor: hasContent ? "#33333322" : "#33333308" }]}
+            onPress={hasContent ? handleSave : undefined}
+            disabled={!hasContent}
             hitSlop={10}
           >
-            <Text style={[editorStyles.saveTopText, { color: canSave ? "#333" : "#aaa" }]}>
+            <Text style={[editorStyles.saveBtnTxt, { color: hasContent ? "#333" : "#aaa" }]}>
               {t.diary.saveEntry}
             </Text>
           </Pressable>
         </View>
 
-        {/* Text area */}
-        <TextInput
-          style={[
-            editorStyles.textInput,
-            { textAlign: isRTL ? "right" : "left" },
-          ]}
-          placeholder={t.diary.noteHint}
-          placeholderTextColor="#999"
-          multiline
-          value={text}
-          onChangeText={setText}
-          autoFocus={!isEditing}
-          textAlignVertical="top"
-          scrollEnabled
-        />
-
-        {/* Color strip */}
-        <View
-          style={[
-            editorStyles.colorBar,
-            { paddingBottom: insets.bottom + 16 },
-          ]}
-        >
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={editorStyles.colorScroll}>
-            {NOTE_COLORS.map((c) => (
-              <Pressable
-                key={c}
-                style={[
-                  editorStyles.swatch,
-                  {
-                    backgroundColor: c,
-                    borderWidth: noteColor === c ? 3 : 1.5,
-                    borderColor: noteColor === c ? "#333" : "#ddd",
-                    transform: [{ scale: noteColor === c ? 1.2 : 1 }],
-                  },
-                ]}
-                onPress={() => { Haptics.selectionAsync(); setNoteColor(c); }}
+        {/* Editor + floating toolbar */}
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+          <ScrollView
+            style={{ flex: 1 }}
+            keyboardShouldPersistTaps="always"
+            contentContainerStyle={{ paddingTop: 8, paddingBottom: 60 }}
+          >
+            {blocks.map((block) => (
+              <RichBlockInput
+                key={block.id}
+                block={block}
+                isActive={block.id === activeId}
+                onChangeText={handleChangeText}
+                onFocus={setActiveId}
+                onEnter={handleEnter}
+                onBackspaceEmpty={handleBackspaceEmpty}
+                inputRef={(r) => { blockRefs.current[block.id] = r; }}
               />
             ))}
           </ScrollView>
-        </View>
-      </KeyboardAvoidingView>
+          <FormattingToolbar
+            activeBlock={activeBlock}
+            onUpdateBlock={(u) => activeId && updateBlock(activeId, u)}
+            noteColor={noteColor}
+            onNoteColorChange={setNoteColor}
+          />
+        </KeyboardAvoidingView>
+      </View>
     </Modal>
   );
 }
 
 const editorStyles = StyleSheet.create({
   root: { flex: 1 },
-  topBar: {
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-  },
-  topBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "rgba(0,0,0,0.08)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  topTitle: {
-    fontSize: 16,
-    fontFamily: "Inter_600SemiBold",
-    color: "#333",
-    flex: 1,
-    textAlign: "center",
-  },
-  saveTopBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-  saveTopText: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
-  textInput: {
-    flex: 1,
-    fontSize: 17,
-    fontFamily: "Inter_400Regular",
-    lineHeight: 26,
-    color: "#222",
-    paddingHorizontal: 22,
-    paddingTop: 12,
-  },
-  colorBar: {
-    borderTopWidth: 1,
-    borderTopColor: "rgba(0,0,0,0.06)",
-    paddingTop: 14,
-    backgroundColor: "rgba(255,255,255,0.35)",
-  },
-  colorScroll: { paddingHorizontal: 18, gap: 12, alignItems: "center" },
-  swatch: { width: 32, height: 32, borderRadius: 16 },
+  topBar: { alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 12 },
+  topBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(0,0,0,0.08)", alignItems: "center", justifyContent: "center" },
+  topTitle: { fontSize: 16, fontFamily: "Inter_600SemiBold", color: "#333", flex: 1, textAlign: "center" },
+  saveBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
+  saveBtnTxt: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
 });
 
 // ─── Note card (pressable → opens editor) ────────────────────────────────────
 
 function NoteCard({
-  note,
-  onPress,
-  onDelete,
+  note, onPress, onDelete,
 }: {
-  note: DiaryNote;
-  onPress: () => void;
-  onDelete: () => void;
+  note: DiaryNote; onPress: () => void; onDelete: () => void;
 }) {
   const { isRTL } = useLanguage();
+  const rich = note.richContent;
   return (
-    <Pressable
-      style={[noteCardStyles.card, { backgroundColor: note.color }]}
-      onPress={onPress}
-    >
+    <Pressable style={[noteCardStyles.card, { backgroundColor: note.color }]} onPress={onPress}>
       <Pressable style={noteCardStyles.closeBtn} onPress={onDelete} hitSlop={10}>
         <Icon name="close" size={14} color="#555" />
       </Pressable>
-      <Text
-        style={[noteCardStyles.text, { textAlign: isRTL ? "right" : "left" }]}
-        numberOfLines={4}
-      >
-        {note.text}
-      </Text>
+
+      {rich && rich.length > 0 ? (
+        <View style={{ paddingRight: 32 }}>
+          {rich.slice(0, 5).map((block, i) => {
+            const sz = BLOCK_SIZES[block.type];
+            const previewSize = Math.min(sz.fontSize, 17);
+            return (
+              <Text
+                key={block.id}
+                numberOfLines={i === 0 && block.type !== "body" ? 1 : 2}
+                style={{
+                  fontSize: previewSize,
+                  lineHeight: previewSize * 1.5,
+                  fontFamily: blockFontFamily(block),
+                  fontStyle: block.italic ? "italic" : "normal",
+                  textDecorationLine: block.underline ? "underline" : "none",
+                  color: block.color,
+                  textAlign: isRTL ? "right" : "left",
+                }}
+              >
+                {block.text}
+              </Text>
+            );
+          })}
+        </View>
+      ) : (
+        <Text style={[noteCardStyles.text, { textAlign: isRTL ? "right" : "left" }]} numberOfLines={4}>
+          {note.text}
+        </Text>
+      )}
+
       <View style={noteCardStyles.editHint}>
         <Icon name="pencil" size={11} color="#888" />
       </View>
@@ -781,14 +922,15 @@ function NotesSection() {
     setModalVisible(true);
   };
 
-  const handleSave = async (text: string, color: string) => {
+  const handleSave = async (text: string, color: string, richContent: RichBlock[]) => {
     if (editingNote) {
-      await updateNote(editingNote.id, text, color);
+      await updateNote(editingNote.id, text, color, richContent);
     } else {
       await saveNote({
         id: `${todayK}-${Date.now()}`,
         date: todayK,
         text,
+        richContent,
         color,
         createdAt: Date.now(),
       });

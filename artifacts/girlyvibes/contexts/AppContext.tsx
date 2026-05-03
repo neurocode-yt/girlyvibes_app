@@ -35,10 +35,22 @@ export interface DiaryEntry {
   cardColor: string; // hex
 }
 
+export interface RichBlock {
+  id: string;
+  text: string;
+  type: 'h1' | 'h2' | 'h3' | 'body' | 'small';
+  bold: boolean;
+  italic: boolean;
+  underline: boolean;
+  color: string;
+  fontStyle: 'sans' | 'serif' | 'mono';
+}
+
 export interface DiaryNote {
   id: string;        // `${date}-${timestamp}`
   date: string;      // YYYY-MM-DD
   text: string;
+  richContent?: RichBlock[];
   color: string;     // hex card color
   createdAt: number; // ms timestamp
 }
@@ -64,7 +76,7 @@ interface AppContextType {
   deleteDiaryEntry: (dateKey: string) => Promise<void>;
   saveNote: (note: DiaryNote) => Promise<void>;
   deleteNote: (noteId: string) => Promise<void>;
-  updateNote: (noteId: string, text: string, color: string) => Promise<void>;
+  updateNote: (noteId: string, text: string, color: string, richContent?: RichBlock[]) => Promise<void>;
   toggleRoutineStep: (routineId: string, stepId: string) => Promise<void>;
   isStepCompleted: (routineId: string, stepId: string) => boolean;
   getRoutineCompletionPercent: (routineId: string, totalSteps: number) => number;
@@ -335,9 +347,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   );
 
   const updateNote = useCallback(
-    async (noteId: string, text: string, color: string) => {
+    async (noteId: string, text: string, color: string, richContent?: RichBlock[]) => {
       const updated = (data.diaryNotes ?? []).map((n) =>
-        n.id === noteId ? { ...n, text, color } : n
+        n.id === noteId ? { ...n, text, color, ...(richContent ? { richContent } : {}) } : n
       );
       await save({ ...data, diaryNotes: updated });
     },
