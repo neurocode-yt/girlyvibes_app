@@ -9,6 +9,8 @@ import {
   Alert,
   Animated,
   Dimensions,
+  KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -540,155 +542,265 @@ const NOTE_COLORS = [
   "#FFB3BA", "#FFDAC1", "#E2F0CB", "#B5EAD7",
 ];
 
-function AddNoteForm({
+// ─── Full-screen note editor modal ───────────────────────────────────────────
+
+function NoteEditorModal({
+  visible,
+  initialNote,
   onSave,
-  onCancel,
+  onClose,
 }: {
+  visible: boolean;
+  initialNote: DiaryNote | null;
   onSave: (text: string, color: string) => void;
-  onCancel: () => void;
+  onClose: () => void;
 }) {
-  const colors = useColors();
+  const insets = useSafeAreaInsets();
   const { t, isRTL } = useLanguage();
   const [text, setText] = useState("");
   const [noteColor, setNoteColor] = useState(NOTE_COLORS[0]);
+
+  useEffect(() => {
+    if (visible) {
+      setText(initialNote?.text ?? "");
+      setNoteColor(initialNote?.color ?? NOTE_COLORS[0]);
+    }
+  }, [visible, initialNote]);
+
   const canSave = text.trim().length > 0;
+  const isEditing = !!initialNote;
 
   return (
-    <View style={[addNoteStyles.wrapper, { backgroundColor: noteColor }]}>
-      <TextInput
-        style={[addNoteStyles.input, { color: "#333", textAlign: isRTL ? "right" : "left" }]}
-        placeholder={t.diary.noteHint}
-        placeholderTextColor="#aaa"
-        multiline
-        value={text}
-        onChangeText={setText}
-        autoFocus
-        textAlignVertical="top"
-      />
-      <View style={addNoteStyles.colorStrip}>
-        {NOTE_COLORS.map((c) => (
-          <Pressable
-            key={c}
-            style={[
-              addNoteStyles.swatch,
-              {
-                backgroundColor: c,
-                borderWidth: noteColor === c ? 3 : 1.5,
-                borderColor: noteColor === c ? "#333" : "#ddd",
-                transform: [{ scale: noteColor === c ? 1.15 : 1 }],
-              },
-            ]}
-            onPress={() => { Haptics.selectionAsync(); setNoteColor(c); }}
-          />
-        ))}
-      </View>
-      <View style={[addNoteStyles.btnRow, { flexDirection: isRTL ? "row-reverse" : "row" }]}>
-        <Pressable
-          style={[addNoteStyles.cancelBtn, { borderColor: "#ccc" }]}
-          onPress={onCancel}
+    <Modal
+      visible={visible}
+      animationType="slide"
+      statusBarTranslucent
+      onRequestClose={onClose}
+    >
+      <KeyboardAvoidingView
+        style={[editorStyles.root, { backgroundColor: noteColor }]}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      >
+        {/* Top bar */}
+        <View
+          style={[
+            editorStyles.topBar,
+            {
+              paddingTop: insets.top + 12,
+              flexDirection: isRTL ? "row-reverse" : "row",
+            },
+          ]}
         >
-          <Text style={[addNoteStyles.cancelText, { color: "#888" }]}>{t.diary.cancel}</Text>
-        </Pressable>
-        <Pressable
-          style={[addNoteStyles.saveBtn, { backgroundColor: canSave ? "#333" : "#ccc", flex: 1 }]}
-          onPress={() => canSave && onSave(text.trim(), noteColor)}
-          disabled={!canSave}
-        >
-          <Icon name="check-circle-outline" size={16} color={canSave ? "#fff" : "#888"} />
-          <Text style={[addNoteStyles.saveText, { color: canSave ? "#fff" : "#888" }]}>
-            {t.diary.saveEntry}
+          <Pressable style={editorStyles.topBtn} onPress={onClose} hitSlop={10}>
+            <Icon name="arrow-left" size={22} color="#333" />
+          </Pressable>
+          <Text style={editorStyles.topTitle}>
+            {isEditing ? t.diary.editEntry : t.diary.addNote}
           </Text>
-        </Pressable>
-      </View>
-    </View>
+          <Pressable
+            style={[
+              editorStyles.saveTopBtn,
+              { backgroundColor: canSave ? "#33333322" : "#33333308" },
+            ]}
+            onPress={() => canSave && onSave(text.trim(), noteColor)}
+            disabled={!canSave}
+            hitSlop={10}
+          >
+            <Text style={[editorStyles.saveTopText, { color: canSave ? "#333" : "#aaa" }]}>
+              {t.diary.saveEntry}
+            </Text>
+          </Pressable>
+        </View>
+
+        {/* Text area */}
+        <TextInput
+          style={[
+            editorStyles.textInput,
+            { textAlign: isRTL ? "right" : "left" },
+          ]}
+          placeholder={t.diary.noteHint}
+          placeholderTextColor="#999"
+          multiline
+          value={text}
+          onChangeText={setText}
+          autoFocus={!isEditing}
+          textAlignVertical="top"
+          scrollEnabled
+        />
+
+        {/* Color strip */}
+        <View
+          style={[
+            editorStyles.colorBar,
+            { paddingBottom: insets.bottom + 16 },
+          ]}
+        >
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={editorStyles.colorScroll}>
+            {NOTE_COLORS.map((c) => (
+              <Pressable
+                key={c}
+                style={[
+                  editorStyles.swatch,
+                  {
+                    backgroundColor: c,
+                    borderWidth: noteColor === c ? 3 : 1.5,
+                    borderColor: noteColor === c ? "#333" : "#ddd",
+                    transform: [{ scale: noteColor === c ? 1.2 : 1 }],
+                  },
+                ]}
+                onPress={() => { Haptics.selectionAsync(); setNoteColor(c); }}
+              />
+            ))}
+          </ScrollView>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
   );
 }
 
-const addNoteStyles = StyleSheet.create({
-  wrapper: { borderRadius: 18, padding: 16, marginBottom: 12 },
-  input: {
-    fontSize: 15,
+const editorStyles = StyleSheet.create({
+  root: { flex: 1 },
+  topBar: {
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+  },
+  topBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(0,0,0,0.08)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  topTitle: {
+    fontSize: 16,
+    fontFamily: "Inter_600SemiBold",
+    color: "#333",
+    flex: 1,
+    textAlign: "center",
+  },
+  saveTopBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  saveTopText: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  textInput: {
+    flex: 1,
+    fontSize: 17,
     fontFamily: "Inter_400Regular",
-    lineHeight: 22,
-    minHeight: 100,
-    marginBottom: 14,
+    lineHeight: 26,
+    color: "#222",
+    paddingHorizontal: 22,
+    paddingTop: 12,
   },
-  colorStrip: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 14 },
-  swatch: { width: 28, height: 28, borderRadius: 14 },
-  btnRow: { gap: 10 },
-  cancelBtn: {
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
+  colorBar: {
+    borderTopWidth: 1,
+    borderTopColor: "rgba(0,0,0,0.06)",
+    paddingTop: 14,
+    backgroundColor: "rgba(255,255,255,0.35)",
   },
-  cancelText: { fontSize: 14, fontFamily: "Inter_500Medium" },
-  saveBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    paddingVertical: 10,
-    borderRadius: 12,
-  },
-  saveText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  colorScroll: { paddingHorizontal: 18, gap: 12, alignItems: "center" },
+  swatch: { width: 32, height: 32, borderRadius: 16 },
 });
 
-function NoteCard({ note, onDelete }: { note: DiaryNote; onDelete: () => void }) {
+// ─── Note card (pressable → opens editor) ────────────────────────────────────
+
+function NoteCard({
+  note,
+  onPress,
+  onDelete,
+}: {
+  note: DiaryNote;
+  onPress: () => void;
+  onDelete: () => void;
+}) {
   const { isRTL } = useLanguage();
   return (
-    <View style={[noteCardStyles.card, { backgroundColor: note.color }]}>
-      <Pressable style={noteCardStyles.closeBtn} onPress={onDelete} hitSlop={8}>
-        <Icon name="close" size={14} color="#666" />
+    <Pressable
+      style={[noteCardStyles.card, { backgroundColor: note.color }]}
+      onPress={onPress}
+    >
+      <Pressable style={noteCardStyles.closeBtn} onPress={onDelete} hitSlop={10}>
+        <Icon name="close" size={14} color="#555" />
       </Pressable>
-      <Text style={[noteCardStyles.text, { textAlign: isRTL ? "right" : "left" }]}>
+      <Text
+        style={[noteCardStyles.text, { textAlign: isRTL ? "right" : "left" }]}
+        numberOfLines={4}
+      >
         {note.text}
       </Text>
-    </View>
+      <View style={noteCardStyles.editHint}>
+        <Icon name="pencil" size={11} color="#888" />
+      </View>
+    </Pressable>
   );
 }
 
 const noteCardStyles = StyleSheet.create({
-  card: { borderRadius: 16, padding: 16, marginBottom: 10, position: "relative" },
+  card: { borderRadius: 18, padding: 16, marginBottom: 10, position: "relative" },
   closeBtn: {
     position: "absolute",
     top: 10,
     right: 10,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     backgroundColor: "rgba(0,0,0,0.08)",
     alignItems: "center",
     justifyContent: "center",
-    zIndex: 1,
+    zIndex: 2,
   },
-  text: { fontSize: 15, fontFamily: "Inter_400Regular", lineHeight: 22, paddingRight: 28 },
+  text: { fontSize: 15, fontFamily: "Inter_400Regular", lineHeight: 22, paddingRight: 30 },
+  editHint: { marginTop: 8, alignItems: "flex-end" },
 });
+
+// ─── Notes section ────────────────────────────────────────────────────────────
 
 function NotesSection() {
   const colors = useColors();
   const { t, isRTL } = useLanguage();
-  const { data, saveNote, deleteNote } = useApp();
-  const [adding, setAdding] = useState(false);
+  const { data, saveNote, deleteNote, updateNote } = useApp();
+  const [modalVisible, setModalVisible] = useState(false);
+  const [editingNote, setEditingNote] = useState<DiaryNote | null>(null);
   const todayK = todayKey();
 
   const allNotes = (data.diaryNotes ?? []).sort((a, b) => b.createdAt - a.createdAt);
   const todayNotes = allNotes.filter((n) => n.date === todayK);
   const pastNotes = allNotes.filter((n) => n.date !== todayK);
 
+  const openNew = () => {
+    setEditingNote(null);
+    setModalVisible(true);
+  };
+
+  const openEdit = (note: DiaryNote) => {
+    setEditingNote(note);
+    setModalVisible(true);
+  };
+
   const handleSave = async (text: string, color: string) => {
-    const note: DiaryNote = {
-      id: `${todayK}-${Date.now()}`,
-      date: todayK,
-      text,
-      color,
-      createdAt: Date.now(),
-    };
-    await saveNote(note);
+    if (editingNote) {
+      await updateNote(editingNote.id, text, color);
+    } else {
+      await saveNote({
+        id: `${todayK}-${Date.now()}`,
+        date: todayK,
+        text,
+        color,
+        createdAt: Date.now(),
+      });
+    }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    setAdding(false);
+    setModalVisible(false);
+    setEditingNote(null);
+  };
+
+  const handleClose = () => {
+    setModalVisible(false);
+    setEditingNote(null);
   };
 
   const handleDelete = (noteId: string) => {
@@ -701,30 +813,36 @@ function NotesSection() {
 
   return (
     <View style={{ marginBottom: 24 }}>
+      <NoteEditorModal
+        visible={modalVisible}
+        initialNote={editingNote}
+        onSave={handleSave}
+        onClose={handleClose}
+      />
+
       <View style={[notesSectionStyles.header, { flexDirection: isRTL ? "row-reverse" : "row" }]}>
         <Text style={[notesSectionStyles.title, { color: colors.foreground }]}>
           {t.diary.notesTitle}
         </Text>
-        {!adding && (
-          <Pressable
-            style={[notesSectionStyles.addBtn, { backgroundColor: colors.primary + "18" }]}
-            onPress={() => setAdding(true)}
-          >
-            <Icon name="plus" size={15} color={colors.primary} />
-            <Text style={[notesSectionStyles.addBtnText, { color: colors.primary }]}>
-              {t.diary.addNote}
-            </Text>
-          </Pressable>
-        )}
+        <Pressable
+          style={[notesSectionStyles.addBtn, { backgroundColor: colors.primary + "18" }]}
+          onPress={openNew}
+        >
+          <Icon name="plus" size={15} color={colors.primary} />
+          <Text style={[notesSectionStyles.addBtnText, { color: colors.primary }]}>
+            {t.diary.addNote}
+          </Text>
+        </Pressable>
       </View>
 
       <View style={{ marginHorizontal: 16 }}>
-        {adding && (
-          <AddNoteForm onSave={handleSave} onCancel={() => setAdding(false)} />
-        )}
-
         {todayNotes.map((note) => (
-          <NoteCard key={note.id} note={note} onDelete={() => handleDelete(note.id)} />
+          <NoteCard
+            key={note.id}
+            note={note}
+            onPress={() => openEdit(note)}
+            onDelete={() => handleDelete(note.id)}
+          />
         ))}
 
         {pastNotes.length > 0 && (
@@ -739,18 +857,22 @@ function NotesSection() {
                 >
                   {formatDisplayDate(note.date, isRTL)}
                 </Text>
-                <NoteCard note={note} onDelete={() => handleDelete(note.id)} />
+                <NoteCard
+                  note={note}
+                  onPress={() => openEdit(note)}
+                  onDelete={() => handleDelete(note.id)}
+                />
               </View>
             ))}
           </View>
         )}
 
-        {!adding && todayNotes.length === 0 && pastNotes.length === 0 && (
-          <View style={notesSectionStyles.emptyRow}>
+        {todayNotes.length === 0 && pastNotes.length === 0 && (
+          <Pressable style={notesSectionStyles.emptyRow} onPress={openNew}>
             <Text style={[notesSectionStyles.emptyText, { color: colors.mutedForeground }]}>
               {t.diary.noNotes}
             </Text>
-          </View>
+          </Pressable>
         )}
       </View>
     </View>

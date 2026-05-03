@@ -64,6 +64,7 @@ interface AppContextType {
   deleteDiaryEntry: (dateKey: string) => Promise<void>;
   saveNote: (note: DiaryNote) => Promise<void>;
   deleteNote: (noteId: string) => Promise<void>;
+  updateNote: (noteId: string, text: string, color: string) => Promise<void>;
   toggleRoutineStep: (routineId: string, stepId: string) => Promise<void>;
   isStepCompleted: (routineId: string, stepId: string) => boolean;
   getRoutineCompletionPercent: (routineId: string, totalSteps: number) => number;
@@ -333,6 +334,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [data, save]
   );
 
+  const updateNote = useCallback(
+    async (noteId: string, text: string, color: string) => {
+      const updated = (data.diaryNotes ?? []).map((n) =>
+        n.id === noteId ? { ...n, text, color } : n
+      );
+      await save({ ...data, diaryNotes: updated });
+    },
+    [data, save]
+  );
+
   return (
     <AppContext.Provider
       value={{
@@ -342,6 +353,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         deleteDiaryEntry,
         saveNote,
         deleteNote,
+        updateNote,
         toggleRoutineStep,
         isStepCompleted,
         getRoutineCompletionPercent,
