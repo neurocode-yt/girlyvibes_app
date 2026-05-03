@@ -137,12 +137,25 @@ function DraggableCard({
           longPressTimer.current = null;
         }
         if (isLongPressed.current) {
-          onDragEndRef.current(indexRef.current, g.dy);
+          const from = indexRef.current;
+          const total = totalCountRef.current;
+          const to = Math.max(0, Math.min(total - 1, from + Math.round(g.dy / CARD_SLOT)));
+
+          // Commit reorder + reset neighbor offsets
+          onDragEndRef.current(from, g.dy);
+
+          // After setOrderedItems, the card's layout position jumps by (to-from)*CARD_SLOT.
+          // Correct ownDragY so the card sits exactly at its new layout slot visually,
+          // then spring the tiny residual to 0 — avoids the card flying from the wrong spot.
+          const residual = g.dy - (to - from) * CARD_SLOT;
+          ownDragY.setValue(residual);
+
           Animated.parallel([
-            Animated.spring(ownDragY, { toValue: 0, useNativeDriver: true, speed: 20, bounciness: 0 }),
-            Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 20, bounciness: 0 }),
-          ]).start();
-          setIsActive(false);
+            Animated.spring(ownDragY, { toValue: 0, useNativeDriver: true, speed: 28, bounciness: 3 }),
+            Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 22, bounciness: 0 }),
+          ]).start(({ finished }) => {
+            if (finished) setIsActive(false);
+          });
         }
         isLongPressed.current = false;
       },
@@ -152,12 +165,12 @@ function DraggableCard({
           longPressTimer.current = null;
         }
         isLongPressed.current = false;
-        setIsActive(false);
-        Animated.parallel([
-          Animated.spring(ownDragY, { toValue: 0, useNativeDriver: true, speed: 20, bounciness: 0 }),
-          Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 20, bounciness: 0 }),
-        ]).start();
         onDragEndRef.current(indexRef.current, 0);
+        ownDragY.setValue(0);
+        Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 22, bounciness: 0 })
+          .start(({ finished }) => {
+            if (finished) setIsActive(false);
+          });
       },
     })
   ).current;
