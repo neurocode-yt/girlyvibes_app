@@ -35,10 +35,13 @@ interface AppData {
   glowUpProgress: GlowUpProgress;
   detoxChallenge: DetoxChallenge;
   favoriteAdvice: string[];
+  profileName: string;
+  profilePhoto: string | null;
 }
 
 interface AppContextType {
   data: AppData;
+  updateProfile: (name: string, photo: string | null) => Promise<void>;
   toggleRoutineStep: (routineId: string, stepId: string) => Promise<void>;
   isStepCompleted: (routineId: string, stepId: string) => boolean;
   getRoutineCompletionPercent: (routineId: string, totalSteps: number) => number;
@@ -72,6 +75,8 @@ const DEFAULT_DATA: AppData = {
     checkedInDays: [],
   },
   favoriteAdvice: [],
+  profileName: "",
+  profilePhoto: null,
 };
 
 const AppContext = createContext<AppContextType | null>(null);
@@ -95,6 +100,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setData(newData);
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(newData));
   }, []);
+
+  const updateProfile = useCallback(
+    async (name: string, photo: string | null) => {
+      await save({ ...data, profileName: name, profilePhoto: photo });
+    },
+    [data, save]
+  );
 
   const toggleRoutineStep = useCallback(
     async (routineId: string, stepId: string) => {
@@ -266,6 +278,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     <AppContext.Provider
       value={{
         data,
+        updateProfile,
         toggleRoutineStep,
         isStepCompleted,
         getRoutineCompletionPercent,
