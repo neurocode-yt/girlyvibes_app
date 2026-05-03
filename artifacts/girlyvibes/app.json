@@ -22,7 +22,16 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icon.png",
         "backgroundColor": "#FBE4EC"
-      }
+      },
+      "permissions": [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
+        "android.permission.ACCESS_MEDIA_LOCATION",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_MEDIA_AUDIO"
+      ]
     },
     "web": {
       "favicon": "./assets/images/icon.png"
@@ -48,11 +57,11 @@
       "typedRoutes": true,
       "reactCompiler": false
     },
+    "owner": "neurocodecode",
     "extra": {
       "eas": {
-        "projectId": "0a4a34ef-be6e-481f-9e5d-540aa134bc79"
+        "projectId": "47bf52d9-98ac-416d-8bc6-0eb92547a113"
       }
-    },
-    "owner": "neurocoode"
+    }
   }
 }
