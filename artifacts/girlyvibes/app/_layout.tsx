@@ -10,7 +10,6 @@ import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect, useRef, useState } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -26,20 +25,8 @@ function RootLayoutNav() {
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen
-        name="advice-detail"
-        options={{
-          headerShown: false,
-          presentation: "card",
-        }}
-      />
-      <Stack.Screen
-        name="profile"
-        options={{
-          headerShown: false,
-          presentation: "card",
-        }}
-      />
+      <Stack.Screen name="advice-detail" options={{ headerShown: false, presentation: "card" }} />
+      <Stack.Screen name="profile" options={{ headerShown: false, presentation: "card" }} />
     </Stack>
   );
 }
@@ -62,9 +49,7 @@ export default function RootLayout() {
   };
 
   useEffect(() => {
-    getStoredLang()
-      .then((l) => setLang(l))
-      .catch(() => setLang("ar"));
+    getStoredLang().then(setLang).catch(() => setLang("ar"));
   }, []);
 
   useEffect(() => {
@@ -90,13 +75,11 @@ export default function RootLayout() {
       <ErrorBoundary>
         <QueryClientProvider client={queryClient}>
           <GestureHandlerRootView style={{ flex: 1 }}>
-            <KeyboardProvider>
-              <LanguageProvider initialLang={lang ?? "ar"}>
-                <AppProvider>
-                  <RootLayoutNav />
-                </AppProvider>
-              </LanguageProvider>
-            </KeyboardProvider>
+            <LanguageProvider initialLang={lang ?? "ar"}>
+              <AppProvider>
+                <RootLayoutNav />
+              </AppProvider>
+            </LanguageProvider>
           </GestureHandlerRootView>
         </QueryClientProvider>
       </ErrorBoundary>
