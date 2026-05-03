@@ -22,7 +22,6 @@
     "p-retry": "^7.1.1",
     "pino": "^9",
     "pino-http": "^10",
-    "resend": "^6.10.0",
     "zod": "catalog:"
   },
   "devDependencies": {

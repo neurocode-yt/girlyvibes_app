@@ -7,7 +7,6 @@ export const AR = {
     glowup: "جلو أب",
     advice: "نصائح",
     boredom: "أنشطة",
-    camera: "كاميرا",
   },
   home: {
     greetingMorning: "صباح الخير ✦",
@@ -92,26 +91,6 @@ export const AR = {
     switchTo: "English",
     current: "العربية",
   },
-  camera: {
-    screenTitle: "كاميرا الغلو ✨",
-    screenSubtitle: "فلاتر جميلة لأجمل لحظاتك",
-    takePhoto: "التقاط صورة 📸",
-    retake: "صورة جديدة",
-    noPhotoYet: "اضغطي لالتقاط صورتك الأولى 🌸",
-    filters: "الفلاتر",
-    filterNormal: "طبيعي",
-    filterWarm: "دافئ",
-    filterCool: "بارد",
-    filterRose: "وردي",
-    filterVintage: "كلاسيك",
-    filterDream: "حلمي",
-    filterMono: "أحادي",
-    permissionDenied: "يلزم إذن الكاميرا لالتقاط الصور",
-    savePhoto: "حفظ الصورة 💾",
-    saveSuccess: "تم الحفظ في الاستوديو! 🌸",
-    saveError: "تعذّر حفظ الصورة",
-    savePermission: "يلزم إذن للوصول إلى الصور",
-  },
 };
 
 export const EN = {
@@ -121,7 +100,6 @@ export const EN = {
     glowup: "Glow Up",
     advice: "Advice",
     boredom: "Activities",
-    camera: "Cam",
   },
   home: {
     greetingMorning: "Good morning ✦",
@@ -205,26 +183,6 @@ export const EN = {
   language: {
     switchTo: "العربية",
     current: "English",
-  },
-  camera: {
-    screenTitle: "Glow Cam ✨",
-    screenSubtitle: "Cute filters for your best moments",
-    takePhoto: "Take Photo 📸",
-    retake: "Retake",
-    noPhotoYet: "Tap to take your first glam shot 🌸",
-    filters: "Filters",
-    filterNormal: "Normal",
-    filterWarm: "Warm",
-    filterCool: "Cool",
-    filterRose: "Rose",
-    filterVintage: "Vintage",
-    filterDream: "Dream",
-    filterMono: "Mono",
-    permissionDenied: "Camera permission is needed to take photos",
-    savePhoto: "Save Photo 💾",
-    saveSuccess: "Saved to your gallery! 🌸",
-    saveError: "Could not save the photo",
-    savePermission: "Gallery permission is needed to save photos",
   },
 };
 

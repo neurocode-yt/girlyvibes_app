@@ -17,7 +17,6 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AppProvider } from "@/contexts/AppContext";
 import { getStoredLang, LanguageProvider } from "@/contexts/LanguageContext";
 import { Lang } from "@/constants/i18n";
-import { logAppOpen } from "@/lib/apiLogger";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -56,7 +55,6 @@ export default function RootLayout() {
 
   useEffect(() => {
     getStoredLang().then((l) => setLang(l));
-    logAppOpen();
   }, []);
 
   useEffect(() => {
