@@ -1,32 +1,20 @@
 import { AppMaterialCommunityIcons as MaterialCommunityIcons } from "@/components/Icons";
 import * as Haptics from "expo-haptics";
+import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import React, { useEffect, useRef, useState } from "react";
 import {
+  Animated,
   LayoutAnimation,
   Platform,
+  PanResponder,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
-import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Animated, {
-  cancelAnimation,
-  FadeInDown,
-  useAnimatedStyle,
-  useSharedValue,
-  withDelay,
-  withRepeat,
-  withSequence,
-  withSpring,
-  withTiming,
-  runOnJS,
-} from "react-native-reanimated";
-import type { SharedValue } from "react-native-reanimated";
-import { Gesture, GestureDetector } from "react-native-gesture-handler";
 
 import { useApp } from "@/contexts/AppContext";
 import { DETOX_CHALLENGES } from "@/data/boredom";
@@ -36,140 +24,26 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useActivities } from "@/hooks/useActivities";
 import { getActivityImage } from "@/lib/activityImages";
 
-// ─── Types ─────────────────────────────────────────────────────────────────────
-
-type HeartConfig = {
-  top?: number;
-  bottom?: number;
-  left?: number;
-  right?: number;
-  size: number;
-  delay: number;
-  ampX: number;
-  ampY: number;
-};
-
-type DragSharedValues = {
-  dragY: SharedValue<number>;
-  draggingIndex: SharedValue<number>;
-  orderedIds: SharedValue<string[]>;
-  allShifts: SharedValue<{ [key: string]: number }>;
-};
-
-type DraggableCardProps = {
-  activity: Activity;
-  index: number;
-  highlighted: boolean;
-  drag: DragSharedValues;
-  totalCount: number;
-  onDragStart: (index: number) => void;
-  commitOrder: (from: number, to: number) => void;
-};
-
-type SortableListProps = {
-  highlighted: string | null;
-  onScrollToggle: (enabled: boolean) => void;
-};
-
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
 const CARD_SLOT = 248;
 
-const HEART_CONFIGS: HeartConfig[] = [
-  { top: -6,  left: 2,   size: 18, delay: 0,   ampX: 3,  ampY: 6 },
-  { top: 14,  left: 20,  size: 13, delay: 200, ampX: 4,  ampY: 5 },
-  { top: 2,   left: 36,  size: 11, delay: 400, ampX: 5,  ampY: 7 },
-  { top: -6,  right: 2,  size: 18, delay: 100, ampX: -3, ampY: 6 },
-  { top: 14,  right: 20, size: 13, delay: 300, ampX: -4, ampY: 5 },
-  { top: 2,   right: 36, size: 11, delay: 500, ampX: -5, ampY: 7 },
-  { bottom: -6,  left: 2,   size: 18, delay: 150, ampX: 3,  ampY: -6 },
-  { bottom: 14,  left: 20,  size: 13, delay: 350, ampX: 4,  ampY: -5 },
-  { bottom: 2,   left: 36,  size: 11, delay: 50,  ampX: 5,  ampY: -7 },
-  { bottom: -6,  right: 2,  size: 18, delay: 250, ampX: -3, ampY: -6 },
-  { bottom: 14,  right: 20, size: 13, delay: 450, ampX: -4, ampY: -5 },
-  { bottom: 2,   right: 36, size: 11, delay: 80,  ampX: -5, ampY: -7 },
-];
-
-// ─── Floating Heart ────────────────────────────────────────────────────────────
-
-function FloatingHeart({ cfg, isVisible }: { cfg: HeartConfig; isVisible: boolean }) {
-  const wobbleX = useSharedValue(0);
-  const wobbleY = useSharedValue(0);
-  const opacity = useSharedValue(0);
-
-  useEffect(() => {
-    if (isVisible) {
-      opacity.value = withDelay(cfg.delay, withTiming(0.3, { duration: 250 }));
-      wobbleX.value = withDelay(
-        cfg.delay,
-        withRepeat(
-          withSequence(
-            withTiming(cfg.ampX, { duration: 700 }),
-            withTiming(-cfg.ampX * 0.5, { duration: 700 }),
-          ),
-          -1,
-          true,
-        ),
-      );
-      wobbleY.value = withDelay(
-        cfg.delay,
-        withRepeat(
-          withSequence(
-            withTiming(cfg.ampY, { duration: 600 }),
-            withTiming(cfg.ampY * 0.3, { duration: 600 }),
-          ),
-          -1,
-          true,
-        ),
-      );
-    } else {
-      cancelAnimation(wobbleX);
-      cancelAnimation(wobbleY);
-      opacity.value = withTiming(0, { duration: 150 });
-      wobbleX.value = withTiming(0, { duration: 200 });
-      wobbleY.value = withTiming(0, { duration: 200 });
-    }
-  }, [isVisible]);
-
-  const animStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-    transform: [
-      { translateX: wobbleX.value },
-      { translateY: wobbleY.value },
-    ],
-  }));
-
-  const pos: { top?: number; bottom?: number; left?: number; right?: number } = {};
-  if (cfg.top    !== undefined) pos.top    = cfg.top;
-  if (cfg.bottom !== undefined) pos.bottom = cfg.bottom;
-  if (cfg.left   !== undefined) pos.left   = cfg.left;
-  if (cfg.right  !== undefined) pos.right  = cfg.right;
-
-  return (
-    <Animated.View style={[styles.heart, pos, animStyle]}>
-      <Text style={{ fontSize: cfg.size }}>🩷</Text>
-    </Animated.View>
-  );
-}
-
-function FloatingHeartsOverlay({ visible }: { visible: boolean }) {
-  return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      {HEART_CONFIGS.map((cfg, i) => (
-        <FloatingHeart key={i} cfg={cfg} isVisible={visible} />
-      ))}
-    </View>
-  );
-}
-
 // ─── Draggable Card ────────────────────────────────────────────────────────────
+
+type DraggableCardProps = {
+  activity: Activity;
+  index: number;
+  totalCount: number;
+  highlighted: boolean;
+  onDragStart: () => void;
+  commitOrder: (from: number, to: number) => void;
+};
 
 function DraggableCard({
   activity,
   index,
-  highlighted,
-  drag,
   totalCount,
+  highlighted,
   onDragStart,
   commitOrder,
 }: DraggableCardProps) {
@@ -178,121 +52,193 @@ function DraggableCard({
   const image = getActivityImage(activity.imageKey);
   const [isActive, setIsActive] = useState(false);
 
-  const { dragY, draggingIndex, orderedIds, allShifts } = drag;
+  const translateY = useRef(new Animated.Value(0)).current;
+  const scale = useRef(new Animated.Value(1)).current;
+  const entryOpacity = useRef(new Animated.Value(0)).current;
+  const entryTranslate = useRef(new Animated.Value(24)).current;
 
-  const gesture = Gesture.Pan()
-    .activateAfterLongPress(420)
-    .onStart(() => {
-      draggingIndex.value = index;
-      runOnJS(setIsActive)(true);
-      runOnJS(onDragStart)(index);
-    })
-    .onUpdate((e) => {
-      dragY.value = e.translationY;
-      const di = draggingIndex.value;
-      const ids = orderedIds.value;
-      const count = ids.length;
-      const raw = di + Math.round(e.translationY / CARD_SLOT);
-      const ti = raw < 0 ? 0 : raw >= count ? count - 1 : raw;
-      const shifts = {};
-      for (let j = 0; j < count; j++) {
-        if (j === di) continue;
-        if (di < ti && j > di && j <= ti) {
-          shifts[ids[j]] = -CARD_SLOT;
-        } else if (di > ti && j < di && j >= ti) {
-          shifts[ids[j]] = CARD_SLOT;
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(entryOpacity, {
+        toValue: 1,
+        duration: 380,
+        delay: index * 60,
+        useNativeDriver: true,
+      }),
+      Animated.timing(entryTranslate, {
+        toValue: 0,
+        duration: 380,
+        delay: index * 60,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+
+  const isLongPressed = useRef(false);
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => isLongPressed.current,
+      onPanResponderGrant: () => {
+        isLongPressed.current = false;
+        longPressTimer.current = setTimeout(() => {
+          isLongPressed.current = true;
+          setIsActive(true);
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          onDragStart();
+          Animated.spring(scale, {
+            toValue: 1.04,
+            useNativeDriver: true,
+            speed: 20,
+          }).start();
+        }, 420);
+      },
+      onPanResponderMove: (_, g) => {
+        if (!isLongPressed.current) return;
+        translateY.setValue(g.dy);
+      },
+      onPanResponderRelease: (_, g) => {
+        if (longPressTimer.current) {
+          clearTimeout(longPressTimer.current);
+          longPressTimer.current = null;
         }
-      }
-      allShifts.value = shifts;
+        if (isLongPressed.current) {
+          const raw = index + Math.round(g.dy / CARD_SLOT);
+          const to = raw < 0 ? 0 : raw >= totalCount ? totalCount - 1 : raw;
+          commitOrder(index, to);
+          Animated.parallel([
+            Animated.spring(translateY, { toValue: 0, useNativeDriver: true }),
+            Animated.spring(scale, {
+              toValue: 1,
+              useNativeDriver: true,
+              speed: 18,
+            }),
+          ]).start();
+          setIsActive(false);
+        }
+        isLongPressed.current = false;
+      },
+      onPanResponderTerminate: () => {
+        if (longPressTimer.current) {
+          clearTimeout(longPressTimer.current);
+          longPressTimer.current = null;
+        }
+        isLongPressed.current = false;
+        setIsActive(false);
+        Animated.parallel([
+          Animated.spring(translateY, { toValue: 0, useNativeDriver: true }),
+          Animated.spring(scale, { toValue: 1, useNativeDriver: true }),
+        ]).start();
+      },
     })
-    .onEnd(() => {
-      const di = draggingIndex.value;
-      const count = orderedIds.value.length;
-      const raw = di + Math.round(dragY.value / CARD_SLOT);
-      const ti = raw < 0 ? 0 : raw >= count ? count - 1 : raw;
-      runOnJS(commitOrder)(di, ti);
-      dragY.value = withSpring(0, { damping: 14 });
-      draggingIndex.value = -1;
-      allShifts.value = {};
-      runOnJS(setIsActive)(false);
-    })
-    .onFinalize(() => {
-      if (draggingIndex.value !== -1) {
-        dragY.value = withSpring(0, { damping: 14 });
-        draggingIndex.value = -1;
-        allShifts.value = {};
-        runOnJS(setIsActive)(false);
-      }
-    });
-
-  const animStyle = useAnimatedStyle(() => {
-    const isDragging = draggingIndex.value === index;
-    const shift = allShifts.value[activity.id] ?? 0;
-    return {
-      transform: [
-        { translateY: isDragging ? dragY.value : shift },
-        { scale: isDragging ? 1.03 : 1 },
-      ],
-      zIndex: isDragging ? 200 : 1,
-      elevation: isDragging ? 12 : 0,
-    };
-  });
+  ).current;
 
   return (
-    <Animated.View entering={FadeInDown.delay(index * 55).duration(480)}>
-      <GestureDetector gesture={gesture}>
-        <Animated.View style={[styles.cardOuter, animStyle]}>
-          <FloatingHeartsOverlay visible={isActive} />
+    <Animated.View
+      style={{
+        opacity: entryOpacity,
+        transform: [{ translateY: entryTranslate }],
+      }}
+    >
+      <Animated.View
+        {...panResponder.panHandlers}
+        style={[
+          styles.cardOuter,
+          { transform: [{ translateY }, { scale }] },
+          isActive && styles.cardActive,
+        ]}
+      >
+        <View
+          style={[
+            styles.card,
+            {
+              borderColor: highlighted ? colors.primary : colors.border,
+              borderWidth: highlighted ? 2 : 1,
+            },
+          ]}
+        >
+          <View style={styles.cardImageWrapper}>
+            <Image source={image} style={styles.cardImage} contentFit="cover" />
+            {highlighted && (
+              <View
+                style={[
+                  styles.cardHighlightBadge,
+                  { backgroundColor: colors.primary },
+                ]}
+              >
+                <MaterialCommunityIcons
+                  name="star-four-points"
+                  size={12}
+                  color="#fff"
+                />
+                <Text style={styles.cardHighlightBadgeText}>
+                  {l("مقترحة", "Pick this!")}
+                </Text>
+              </View>
+            )}
+            <LinearGradient
+              colors={["transparent", "rgba(0,0,0,0.55)"]}
+              style={StyleSheet.absoluteFill}
+            />
+            <View style={styles.cardDurationBadge}>
+              <Text style={styles.cardDurationText}>
+                {l(activity.duration, activity.durationEn)}
+              </Text>
+            </View>
+            {isActive && (
+              <View
+                style={[
+                  styles.dragHint,
+                  { backgroundColor: "rgba(0,0,0,0.45)" },
+                ]}
+              >
+                <MaterialCommunityIcons
+                  name="drag-vertical"
+                  size={20}
+                  color="#fff"
+                />
+              </View>
+            )}
+          </View>
 
           <View
             style={[
-              styles.card,
+              styles.cardBody,
               {
-                borderColor: highlighted ? colors.primary : colors.border,
-                borderWidth: highlighted ? 2 : 1,
+                backgroundColor: highlighted
+                  ? colors.highlight
+                  : colors.card,
               },
             ]}
           >
-            <View style={styles.cardImageWrapper}>
-              <Image source={image} style={styles.cardImage} contentFit="cover" />
-              {highlighted && (
-                <View style={[styles.cardHighlightBadge, { backgroundColor: colors.primary }]}>
-                  <MaterialCommunityIcons name="star-four-points" size={12} color="#fff" />
-                  <Text style={styles.cardHighlightBadgeText}>{l("مقترحة", "Pick this!")}</Text>
-                </View>
-              )}
-              <LinearGradient
-                colors={["transparent", "rgba(0,0,0,0.55)"]}
-                style={StyleSheet.absoluteFill}
-              />
-              <View style={styles.cardDurationBadge}>
-                <Text style={styles.cardDurationText}>
-                  {l(activity.duration, activity.durationEn)}
-                </Text>
-              </View>
-              {isActive && (
-                <View style={[styles.dragHint, { backgroundColor: "rgba(0,0,0,0.45)" }]}>
-                  <MaterialCommunityIcons name="drag-vertical" size={20} color="#fff" />
-                </View>
-              )}
-            </View>
-
-            <View style={[styles.cardBody, { backgroundColor: highlighted ? colors.highlight : colors.card }]}>
-              <Text
-                style={[styles.cardTitle, { color: highlighted ? colors.primary : colors.foreground }]}
-                numberOfLines={2}
-              >
-                {l(activity.title, activity.titleEn)}
-              </Text>
-            </View>
+            <Text
+              style={[
+                styles.cardTitle,
+                {
+                  color: highlighted
+                    ? colors.primary
+                    : colors.foreground,
+                },
+              ]}
+              numberOfLines={2}
+            >
+              {l(activity.title, activity.titleEn)}
+            </Text>
           </View>
-        </Animated.View>
-      </GestureDetector>
+        </View>
+      </Animated.View>
     </Animated.View>
   );
 }
 
 // ─── Sortable Activity List ────────────────────────────────────────────────────
+
+type SortableListProps = {
+  highlighted: string | null;
+  onScrollToggle: (enabled: boolean) => void;
+};
 
 function SortableActivityList({ highlighted, onScrollToggle }: SortableListProps) {
   const { activities } = useActivities();
@@ -302,25 +248,8 @@ function SortableActivityList({ highlighted, onScrollToggle }: SortableListProps
     setOrderedItems(activities);
   }, [activities]);
 
-  const dragY = useSharedValue(0);
-  const draggingIndex = useSharedValue(-1);
-  const orderedIds = useSharedValue<string[]>(orderedItems.map((i) => i.id));
-  const allShifts = useSharedValue<{ [key: string]: number }>({});
-
-  useEffect(() => {
-    orderedIds.value = orderedItems.map((i) => i.id);
-  }, [orderedItems]);
-
-  const drag: DragSharedValues = {
-    dragY,
-    draggingIndex,
-    orderedIds,
-    allShifts,
-  };
-
-  const onDragStart = (index: number) => {
+  const onDragStart = () => {
     onScrollToggle(false);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
   };
 
   const commitOrder = (from: number, to: number) => {
@@ -345,7 +274,6 @@ function SortableActivityList({ highlighted, onScrollToggle }: SortableListProps
           index={index}
           totalCount={orderedItems.length}
           highlighted={highlighted === activity.id}
-          drag={drag}
           onDragStart={onDragStart}
           commitOrder={commitOrder}
         />
@@ -358,7 +286,7 @@ function SortableActivityList({ highlighted, onScrollToggle }: SortableListProps
 
 function DetoxSection() {
   const colors = useColors();
-  const { t, l } = useLanguage();
+  const { t, l, lang } = useLanguage();
   const {
     data,
     startDetoxChallenge,
@@ -389,22 +317,56 @@ function DetoxSection() {
               key={ch.id}
               style={[
                 styles.challengeCard,
-                { backgroundColor: colors.card, borderColor: colors.border },
+                {
+                  backgroundColor: colors.card,
+                  borderColor: colors.border,
+                },
               ]}
               onPress={async () => {
-                await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                await Haptics.notificationAsync(
+                  Haptics.NotificationFeedbackType.Success
+                );
                 await startDetoxChallenge(ch.id);
               }}
             >
-              <View style={[styles.challengeDayBadge, { backgroundColor: ch.color }]}>
-                <Text style={[styles.challengeDayNum, { color: colors.primary }]}>{ch.days}</Text>
-                <Text style={[styles.challengeDayText, { color: colors.primary }]}>{t.boredom.days}</Text>
+              <View
+                style={[
+                  styles.challengeDayBadge,
+                  { backgroundColor: ch.color },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.challengeDayNum,
+                    { color: colors.primary },
+                  ]}
+                >
+                  {ch.days}
+                </Text>
+                <Text
+                  style={[
+                    styles.challengeDayText,
+                    { color: colors.primary },
+                  ]}
+                >
+                  {t.boredom.days}
+                </Text>
               </View>
               <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={[styles.challengeName, { color: colors.foreground }]}>
+                <Text
+                  style={[
+                    styles.challengeName,
+                    { color: colors.foreground },
+                  ]}
+                >
                   {l(ch.title, ch.titleEn)}
                 </Text>
-                <Text style={[styles.challengeDesc, { color: colors.mutedForeground }]}>
+                <Text
+                  style={[
+                    styles.challengeDesc,
+                    { color: colors.mutedForeground },
+                  ]}
+                >
                   {l(ch.description, ch.descriptionEn)}
                 </Text>
               </View>
@@ -423,12 +385,30 @@ function DetoxSection() {
       <Text style={[styles.detoxTitle, { color: colors.foreground }]}>
         {l(activeChallenge.title, activeChallenge.titleEn)}
       </Text>
-      <View style={[styles.activeChallenge, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <View
+        style={[
+          styles.activeChallenge,
+          {
+            backgroundColor: colors.card,
+            borderColor: colors.border,
+          },
+        ]}
+      >
         <View style={styles.challengeProgress}>
-          <Text style={[styles.challengeProgressText, { color: colors.foreground }]}>
+          <Text
+            style={[
+              styles.challengeProgressText,
+              { color: colors.foreground },
+            ]}
+          >
             {t.boredom.dayOf} {daysCompleted} {t.boredom.of} {totalDays}
           </Text>
-          <Text style={[styles.challengeProgressNum, { color: colors.primary }]}>
+          <Text
+            style={[
+              styles.challengeProgressNum,
+              { color: colors.primary },
+            ]}
+          >
             {Math.round(progress * 100)}%
           </Text>
         </View>
@@ -444,10 +424,20 @@ function DetoxSection() {
           />
         </View>
         <View style={styles.challengeRules}>
-          {(l("ar", "en") === "ar" ? activeChallenge.rules : activeChallenge.rulesEn).map((rule, i) => (
+          {(
+            lang === "ar"
+              ? activeChallenge.rules
+              : activeChallenge.rulesEn
+          ).map((rule, i) => (
             <View key={i} style={styles.ruleRow}>
-              <View style={[styles.ruleDot, { backgroundColor: colors.primary }]} />
-              <Text style={[styles.ruleText, { color: colors.foreground }]}>{rule}</Text>
+              <View
+                style={[styles.ruleDot, { backgroundColor: colors.primary }]}
+              />
+              <Text
+                style={[styles.ruleText, { color: colors.foreground }]}
+              >
+                {rule}
+              </Text>
             </View>
           ))}
         </View>
@@ -455,17 +445,37 @@ function DetoxSection() {
           <Pressable
             style={[styles.checkInBtn, { backgroundColor: colors.primary }]}
             onPress={async () => {
-              await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              await Haptics.notificationAsync(
+                Haptics.NotificationFeedbackType.Success
+              );
               await checkInDetox();
             }}
           >
-            <MaterialCommunityIcons name="check-circle" size={18} color="#fff" />
+            <MaterialCommunityIcons
+              name="check-circle"
+              size={18}
+              color="#fff"
+            />
             <Text style={styles.checkInBtnText}>{t.boredom.checkIn}</Text>
           </Pressable>
         ) : (
-          <View style={[styles.checkedInBanner, { backgroundColor: colors.success + "33" }]}>
-            <MaterialCommunityIcons name="check-circle" size={18} color={colors.success} />
-            <Text style={[styles.checkedInText, { color: colors.successForeground }]}>
+          <View
+            style={[
+              styles.checkedInBanner,
+              { backgroundColor: colors.success + "33" },
+            ]}
+          >
+            <MaterialCommunityIcons
+              name="check-circle"
+              size={18}
+              color={colors.success}
+            />
+            <Text
+              style={[
+                styles.checkedInText,
+                { color: colors.successForeground },
+              ]}
+            >
               {t.boredom.checkedIn}
             </Text>
           </View>
@@ -480,35 +490,38 @@ function DetoxSection() {
 export default function BoredomScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { t, l } = useLanguage();
+  const { t, l, lang } = useLanguage();
   const { activities } = useActivities();
   const [highlighted, setHighlighted] = useState<string | null>(null);
   const [scrollEnabled, setScrollEnabled] = useState(true);
-  const scrollRef = useRef<ScrollView>(null);
 
-  const spinValue = useSharedValue(0);
+  const spinValue = useRef(new Animated.Value(0)).current;
   const topInset = Platform.OS === "web" ? 67 : insets.top;
+
+  const spinInterpolate = spinValue.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["0deg", "360deg"],
+  });
 
   function surprise() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    spinValue.value = withSequence(
-      withTiming(1, { duration: 300 }),
-      withTiming(0, { duration: 0 }),
-    );
+    spinValue.setValue(0);
+    Animated.timing(spinValue, {
+      toValue: 1,
+      duration: 350,
+      useNativeDriver: true,
+    }).start();
     const random = activities[Math.floor(Math.random() * activities.length)];
     setHighlighted(random.id);
     setTimeout(() => setHighlighted(null), 4000);
   }
 
-  const spinStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${spinValue.value * 360}deg` }],
-  }));
-
   return (
     <ScrollView
-      ref={scrollRef}
       style={[styles.container, { backgroundColor: colors.background }]}
-      contentContainerStyle={{ paddingBottom: Platform.OS === "web" ? 100 : 120 }}
+      contentContainerStyle={{
+        paddingBottom: Platform.OS === "web" ? 100 : 120,
+      }}
       showsVerticalScrollIndicator={false}
       scrollEnabled={scrollEnabled}
     >
@@ -527,22 +540,36 @@ export default function BoredomScreen() {
           style={[styles.surpriseBtn, { backgroundColor: colors.primary }]}
           onPress={surprise}
         >
-          <Animated.View style={spinStyle}>
-            <MaterialCommunityIcons name="dice-5-outline" size={22} color="#fff" />
+          <Animated.View
+            style={{ transform: [{ rotate: spinInterpolate }] }}
+          >
+            <MaterialCommunityIcons
+              name="dice-5-outline"
+              size={22}
+              color="#fff"
+            />
           </Animated.View>
           <Text style={styles.surpriseBtnText}>{t.boredom.surpriseMe}</Text>
         </Pressable>
 
         {highlighted && (
-          <Animated.View
-            entering={FadeInDown.duration(300)}
+          <View
             style={[
               styles.highlightBanner,
-              { backgroundColor: colors.highlight, borderColor: colors.primary },
+              {
+                backgroundColor: colors.highlight,
+                borderColor: colors.primary,
+              },
             ]}
           >
-            <MaterialCommunityIcons name="star-four-points" size={16} color={colors.primary} />
-            <Text style={[styles.highlightText, { color: colors.primary }]}>
+            <MaterialCommunityIcons
+              name="star-four-points"
+              size={16}
+              color={colors.primary}
+            />
+            <Text
+              style={[styles.highlightText, { color: colors.primary }]}
+            >
               {t.boredom.try}{" "}
               <Text style={{ fontFamily: "Inter_600SemiBold" }}>
                 {(() => {
@@ -551,7 +578,7 @@ export default function BoredomScreen() {
                 })()}
               </Text>
             </Text>
-          </Animated.View>
+          </View>
         )}
       </LinearGradient>
 
@@ -559,7 +586,9 @@ export default function BoredomScreen() {
         <Text style={[styles.sectionLabel, { color: colors.foreground }]}>
           {t.boredom.offlineIdeas}
         </Text>
-        <Text style={[styles.sectionHint, { color: colors.mutedForeground }]}>
+        <Text
+          style={[styles.sectionHint, { color: colors.mutedForeground }]}
+        >
           {l("اضغطي مطولاً لإعادة الترتيب", "Hold to reorder")}
         </Text>
 
@@ -640,8 +669,12 @@ const styles = StyleSheet.create({
   cardOuter: {
     borderRadius: 20,
   },
-  heart: {
-    position: "absolute",
+  cardActive: {
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    elevation: 12,
   },
   card: {
     borderRadius: 20,
