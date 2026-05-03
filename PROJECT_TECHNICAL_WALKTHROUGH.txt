@@ -1,0 +1,309 @@
+1) Product Overview (Plain-English)
+
+- Observed: The app is a self-care/lifestyle companion with daily routines, glow-up plans, advice, boredom/detox activities, camera/filter flow, and profile/streak behavior, implemented under artifacts/girlyvibes/app/(tabs)/.
+- Observed: Main user flows are tab-driven: home, routines, glowup, advice, chat, boredom, camera in artifacts/girlyvibes/app/(tabs)/_layout.tsx.
+- Observed: Advice has detail pages (artifacts/girlyvibes/app/advice-detail.tsx), and profile is a separate route (artifacts/girlyvibes/app/profile.tsx).
+- Observed: Chat UI currently shows "Coming Soon" and is not feature-complete in artifacts/girlyvibes/app/(tabs)/chat.tsx.
+- Inferred: Product intent is lifestyle engagement + lightweight AI/telemetry backend, with some backend capabilities ahead of UI integration.
+
+2) High-Level Architecture Diagram (ASCII)
+
+[Mobile App: Expo RN]
+  artifacts/girlyvibes/app/*
+        |
+        | fetch (HTTPS, EXPO_PUBLIC_DOMAIN)
+        v
+[API Server: Express]
+  artifacts/api-server/src/*
+        |            \
+        |             \--> [Resend Email API]
+        |
+        \--> [Gemini Integration Package]
+              lib/integrations-gemini-ai/src/*
+        |
+        \--> (optional DB layer available)
+              lib/db/src/* (Drizzle + pg)
+
+[Shared Contracts / Clients]
+  lib/api-spec (OpenAPI + Orval)
+  lib/api-zod (generated validators)
+  lib/api-client-react (generated client/hooks)
+
+- Observed: API routes mounted under /api in artifacts/api-server/src/app.ts.
+- Observed: Mobile logging calls API via EXPO_PUBLIC_DOMAIN in artifacts/girlyvibes/lib/apiLogger.ts.
+- Observed: Gemini + Resend integrations are server-side.
+
+3) Repository Map (Important Directories + Purpose)
+
+- artifacts/girlyvibes — Expo React Native app (routes, components, contexts, scripts).
+- artifacts/api-server — Express API service (/healthz, /chat, /log/*).
+- artifacts/mockup-sandbox — separate Vite sandbox package.
+- lib/api-spec — OpenAPI source + Orval codegen config.
+- lib/api-client-react — generated API client/hooks + custom fetch wrapper.
+- lib/api-zod — generated Zod schemas/types.
+- lib/db — Drizzle/Postgres package; schema currently minimal/empty.
+- lib/integrations-gemini-ai — Gemini client and helpers.
+- scripts — workspace utility package.
+- Root package.json, pnpm-workspace.yaml, pnpm-lock.yaml — workspace orchestration.
+
+4) Mobile App Deep Dive
+
+- Framework/runtime (Observed): Expo SDK 54 + React Native 0.81.5 + Expo Router from artifacts/girlyvibes/package.json.
+- Routing (Observed): file-based routing with tab layout and stack wrapper in artifacts/girlyvibes/app/_layout.tsx and artifacts/girlyvibes/app/(tabs)/_layout.tsx.
+- State model (Observed):
+  - global app state/context in artifacts/girlyvibes/contexts/AppContext.tsx.
+  - React Query provider set at root in artifacts/girlyvibes/app/_layout.tsx.
+  - Async persistence via @react-native-async-storage/async-storage usage in context/logger.
+- Device features (Observed): image picker/media library/haptics/location/web browser packages in artifacts/girlyvibes/package.json; camera/media flow in artifacts/girlyvibes/app/(tabs)/camera.tsx.
+- API calls (Observed): logging endpoints called from artifacts/girlyvibes/lib/apiLogger.ts with base URL from EXPO_PUBLIC_DOMAIN.
+- Critical app states (Observed/Inferred):
+  - first launch logs app-open once per day (LAST_OPEN_KEY) in apiLogger.ts.
+  - permission-heavy features around camera/media.
+  - offline/error handling is minimal (mostly console.warn).
+
+5) Backend/API Deep Dive
+
+- Server bootstrap (Observed): Express app with cors, JSON/urlencoded parsers, and pino-http in artifacts/api-server/src/app.ts.
+- Entry point (Observed): starts on PORT in artifacts/api-server/src/index.ts.
+- Endpoints (Observed):
+  - GET /api/healthz in artifacts/api-server/src/routes/health.ts.
+  - POST /api/chat in artifacts/api-server/src/routes/chat/index.ts (SSE stream).
+  - POST /api/log/open and POST /api/log/photo in artifacts/api-server/src/routes/log/index.ts.
+- Validation (Observed):
+  - Health route uses generated Zod parse.
+  - Chat/log routes use mostly manual checks.
+- Integrations (Observed):
+  - Gemini via @workspace/integrations-gemini-ai.
+  - Resend for sending log emails.
+  - DB package imported in workspace but currently not central to active routes.
+- Maturity (Inferred):
+  - health/log routes usable.
+  - chat backend exists but mobile chat UI is not wired.
+
+6) Shared Libraries / Contracts Deep Dive
+
+- lib/api-spec — openapi.yaml + orval.config.ts controls codegen.
+- lib/api-client-react — generated typed client/hooks in src/generated/.
+- lib/api-zod — generated validation/type artifacts from OpenAPI.
+- lib/db — Drizzle + pg setup (drizzle.config.ts, src/index.ts), schema skeleton.
+- lib/integrations-gemini-ai — centralized Gemini client + helper methods.
+- Drift risk (Observed): OpenAPI includes only health route currently, while live API has chat/log routes.
+
+7) End-to-End Feature Flows (Step-by-Step)
+
+- Home -> Content navigation:
+  1) User opens app and lands on tabs/home.
+  2) CTA navigates to routines/glowup/advice/profile via router in app/(tabs)/index.tsx.
+
+- Routine tracking:
+  1) User marks steps in app/(tabs)/routines.tsx.
+  2) State updates in contexts/AppContext.tsx.
+  3) Streak/progress persisted with AsyncStorage.
+
+- Advice detail/favorites:
+  1) Category selection and favorite toggle in app/(tabs)/advice.tsx.
+  2) Detailed article view in app/advice-detail.tsx.
+
+- Camera and photo logging:
+  1) User picks/captures media in app/(tabs)/camera.tsx.
+  2) Local save via media library.
+  3) Optional backend log upload through lib/apiLogger.ts to /api/log/photo.
+
+- App-open telemetry:
+  1) On app layout init, logAppOpen() runs.
+  2) Daily guard via AsyncStorage key.
+  3) Sends payload to /api/log/open.
+
+- Chat (Observed/Inferred):
+  1) UI currently placeholder only.
+  2) Backend SSE chat exists.
+  3) Wiring pending between mobile tab and /api/chat.
+
+8) Tooling and Developer Workflow
+
+- Workspace/package manager (Observed): pnpm workspaces in pnpm-workspace.yaml.
+- Language/build tooling (Observed): TypeScript, Babel, Metro in mobile package config files.
+- Server bundling (Observed): esbuild in artifacts/api-server/build.mjs.
+- Formatting (Observed): Prettier at root.
+- Typecheck (Observed): root and per-package typecheck scripts.
+- Lint/tests (Observed): no clear lint/test scripts in key package manifests scanned.
+- Replit coupling (Observed): environment and artifact configs in .replit/artifact files.
+- Windows caveat (Observed): several scripts assume Unix shell syntax (sh, export, $VAR).
+
+9) Build / Deploy / Release Pipeline
+
+- Mobile dev (Observed): expo start variants in artifacts/girlyvibes/package.json.
+- Mobile static build pipeline (Observed): custom script artifacts/girlyvibes/scripts/build.js.
+- Mobile serving (Observed): custom static server artifacts/girlyvibes/server/serve.js.
+- Android release (Observed): EAS profiles (preview APK, production AAB) in artifacts/girlyvibes/eas.json.
+- API build/start (Observed): esbuild to dist, then node run in artifacts/api-server/package.json.
+- CI (Unknown): no visible workflow files in scanned paths; verify external CI if used.
+
+10) Environment Variables and Configuration Matrix
+
+- EXPO_PUBLIC_DOMAIN
+  - Used by: artifacts/girlyvibes/lib/apiLogger.ts
+  - Required: Yes for backend logging calls
+  - Example: api.example.com
+  - Impact if missing: malformed URL and request failures
+
+- PORT
+  - Used by: artifacts/api-server/src/index.ts, mobile build/serve scripts
+  - Required: Yes for server startup
+  - Example: 3000 (API)
+  - Impact: server fails or binds unexpectedly
+
+- NODE_ENV, LOG_LEVEL
+  - Used by: artifacts/api-server/src/lib/logger.ts
+  - Required: Optional but recommended
+  - Impact: logging mode/verbosity differences
+
+- RESEND_API_KEY
+  - Used by: artifacts/api-server/src/routes/log/index.ts
+  - Required: Yes for email log delivery
+  - Impact: log routes fail to send email
+
+- AI_INTEGRATIONS_GEMINI_BASE_URL, AI_INTEGRATIONS_GEMINI_API_KEY
+  - Used by: lib/integrations-gemini-ai/src/client.ts
+  - Required: Yes for chat integration startup
+  - Impact: API process throws on startup if missing
+
+- DATABASE_URL
+  - Used by: lib/db/src/index.ts and lib/db/drizzle.config.ts
+  - Required: Yes if DB features/migrations used
+  - Impact: DB init/migration fails
+
+- Replit variables (REPLIT_*)
+  - Used by: mobile dev script/build pipeline
+  - Required: context-dependent
+  - Impact: local dev mismatch unless overridden
+
+11) Error Handling, Logging, and Observability
+
+- Observed: mobile side mostly logs warnings/errors via console.warn in apiLogger.ts and feature files.
+- Observed: API uses pino + pino-http for structured logs.
+- Observed: health response parsing uses Zod; route-level robustness varies.
+- Observed: chat includes simple in-memory rate limiting by IP.
+- Inferred: observability is decent for local debugging but lacks unified tracing/metrics/alerting.
+
+12) Testing Status and Quality Gaps
+
+- Observed: TypeScript checks are present (typecheck scripts).
+- Observed: No explicit Jest/Vitest/Detox/e2e scripts discovered in scanned manifests.
+- Observed: No explicit lint command discovered in main manifests.
+- Inferred: regression risk is moderate-high; runtime issues are caught late.
+- Recommended: add baseline unit tests for context/reducers and API route validation; add CI typecheck+lint+smoke tests.
+
+13) Security, Privacy, and Data Handling Review
+
+- Observed: /log/photo accepts base64 image and forwards by email (artifacts/api-server/src/routes/log/index.ts).
+- Observed: CORS currently permissive default in app.ts.
+- Observed: chat rate limiting is memory-local and non-distributed.
+- Observed: sensitive headers are redacted in logger config (good).
+- Inferred risks: no clear auth/authorization for API routes, possible abuse of log/photo endpoints, privacy concerns with media email forwarding.
+- Immediate hardening: add auth, size/type checks, strict CORS origins, durable rate limiting store, retention policy.
+
+14) Known Issues / Blockers / Platform Pitfalls
+
+- Observed: Windows shell incompatibilities:
+  - root preinstall uses sh.
+  - API dev script uses export.
+  - mobile dev script relies on $VAR expansions.
+- Observed: Expo runtime issue encountered: missing expo-blur caused mobile blue-screen crash.
+- Observed: Expo interactive prompt ("Log in / Proceed anonymously") can block startup and make Expo Go fail if not answered.
+- Observed: package version mismatch warnings around Expo dependencies can create instability.
+- Inferred: repo is optimized for Replit/Linux-like flow; Windows requires command adjustments.
+
+15) Practical Onboarding Guide (First 60 Minutes)
+
+- 0-10 min (read):
+  - Review root package.json, pnpm-workspace.yaml.
+  - Inspect mobile routes in artifacts/girlyvibes/app/.
+  - Inspect API routes in artifacts/api-server/src/routes/.
+
+- 10-25 min (install + mobile run):
+  - corepack pnpm install --ignore-scripts
+  - cd artifacts/girlyvibes
+  - corepack pnpm exec expo start --lan --clear
+  - choose Proceed anonymously when prompted
+  - scan QR via Expo Go (same Wi-Fi)
+
+- 25-35 min (API run):
+  - Set required env vars (PORT, Gemini keys, RESEND_API_KEY).
+  - cd artifacts/api-server
+  - Windows-safe start:
+    - $env:NODE_ENV='development'
+    - corepack pnpm run build
+    - corepack pnpm run start
+
+- 35-50 min (verify core flows):
+  - Navigate tabs and test routines/advice/camera.
+  - Confirm API logs for /api/log/open and /api/log/photo.
+  - Validate health endpoint.
+
+- 50-60 min (stabilize):
+  - Align Expo package versions with SDK expectations.
+  - Document .env template.
+  - Note known gaps (chat UI wiring, OpenAPI drift).
+
+16) Suggested Roadmap
+
+- Quick wins (1-2 weeks):
+  - Fix Windows portability (cross-env, shell-neutral scripts).
+  - Resolve Expo version drift and lock compatible versions.
+  - Add .env.example for mobile + API.
+  - Remove/guard interactive Expo prompt in team run docs.
+  - Add basic lint + test scripts.
+
+- Medium (2-6 weeks):
+  - Wire mobile chat UI to /api/chat SSE endpoint.
+  - Expand OpenAPI spec to include /chat and /log/*.
+  - Regenerate api-client-react and api-zod; enforce spec sync in CI.
+  - Strengthen backend validation with Zod for all routes.
+  - Add auth and stricter CORS policy.
+
+- Long term (6+ weeks):
+  - Implement real DB schema/migrations and persistence.
+  - Add production-grade rate limiting and abuse prevention.
+  - Add end-to-end tests (mobile + API integration).
+  - Add observability stack (error tracking/metrics/traces).
+  - Define release strategy across Expo OTA + EAS + backend deploy.
+
+Top 10 Facts a New Maintainer Must Know
+
+1. The app is Expo Router tab-first and lives in artifacts/girlyvibes/app/(tabs)/.
+2. Chat UI is placeholder; backend chat endpoint exists.
+3. Logging/photo uploads are real backend calls via EXPO_PUBLIC_DOMAIN.
+4. API is Express 5 with pino logging and SSE chat route.
+5. Gemini env vars are mandatory for API startup.
+6. Resend key is mandatory for logging email routes.
+7. OpenAPI spec currently does not cover all implemented endpoints.
+8. DB package exists but schema is currently minimal.
+9. Windows shell incompatibilities are real and can block onboarding.
+10. Expo Go blue screen usually reflects Metro/module/env startup issues.
+
+Top 10 Technical Debt Items
+
+1. Spec/implementation drift (/chat and /log/* undocumented in OpenAPI).
+2. Missing full request/response validation across non-health routes.
+3. No clear auth/authorization on API endpoints.
+4. Permissive CORS defaults.
+5. Fragile Windows dev scripts (sh, export, $VAR).
+6. Limited automated testing and linting.
+7. Chat feature split-brain (backend ready, UI not integrated).
+8. Replit-coupled env assumptions in scripts.
+9. Media upload privacy/retention handling not explicit.
+10. In-memory rate limiting not production-grade.
+
+Top 10 Highest-Impact Next Actions
+
+1. Add .env.example with required vars and comments.
+2. Make scripts cross-platform (cross-env, remove Unix-only shell syntax).
+3. Document canonical local runbook for mobile + API.
+4. Update OpenAPI spec for /chat and /log/*.
+5. Regenerate and adopt typed client for real endpoints.
+6. Add Zod validation middleware for all API routes.
+7. Implement auth + tighten CORS.
+8. Complete chat UI integration using SSE.
+9. Add CI checks: typecheck + lint + basic tests.
+10. Define and enforce dependency/version policy for Expo SDK compatibility.

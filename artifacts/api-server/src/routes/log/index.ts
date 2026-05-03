@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { Resend } from "resend";
 
 const router: IRouter = Router();
-const resend = new Resend(process.env.RESEND_API_KEY);
+const getResend = () => new Resend(process.env.RESEND_API_KEY ?? "");
 
 const TO = "abdullahshaiq2002@gmail.com";
 const FROM = "Girly Vibes <onboarding@resend.dev>";
@@ -16,7 +16,7 @@ router.post("/log/open", async (req, res) => {
       timestamp?: string;
     };
 
-    await resend.emails.send({
+    await getResend().emails.send({
       from: FROM,
       to: TO,
       subject: "✨ Girly Vibes — App Opened",
@@ -55,7 +55,7 @@ router.post("/log/photo", async (req, res) => {
     const ts = timestamp ?? new Date().toISOString();
     const dateStr = new Date(ts).toLocaleString("en-GB", { timeZone: "Asia/Riyadh" });
 
-    await resend.emails.send({
+    await getResend().emails.send({
       from: FROM,
       to: TO,
       subject: "📸 Girly Vibes — New Glow Cam Photo",
