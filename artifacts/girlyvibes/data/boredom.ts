@@ -1,50 +1,43 @@
-import { MaterialCommunityIcons } from "@expo/vector-icons";
-
-type IconName = keyof typeof MaterialCommunityIcons.glyphMap;
-
 export interface Activity {
   id: string;
   title: string;
   titleEn: string;
-  icon: IconName;
-  category: string;
-  categoryEn: string;
+  imageKey: string;
   duration: string;
   durationEn: string;
-  color: string;
 }
 
 export const ACTIVITIES: Activity[] = [
-  { id: "a1", title: "رتّبي غرفتك من جديد", titleEn: "Rearrange your room", icon: "sofa-outline", category: "المنزل", categoryEn: "Home", duration: "١-٢ ساعة", durationEn: "1-2 hrs", color: "#FBE4EC" },
-  { id: "a2", title: "ابدئي لوحة أحلامك", titleEn: "Start a vision board", icon: "image-multiple-outline", category: "الإبداع", categoryEn: "Creativity", duration: "١ ساعة", durationEn: "1 hr", color: "#F7C9D9" },
-  { id: "a3", title: "اكتبي رسالة لنفسك المستقبلية", titleEn: "Write a letter to your future self", icon: "email-outline", category: "التأمل", categoryEn: "Reflection", duration: "٣٠ دقيقة", durationEn: "30 min", color: "#D8C9E8" },
-  { id: "a4", title: "تعلّمي تسريحة شعر جديدة", titleEn: "Learn a new hairstyle from a tutorial", icon: "scissors-cutting", category: "الجمال", categoryEn: "Beauty", duration: "٤٥ دقيقة", durationEn: "45 min", color: "#FBE4EC" },
-  { id: "a5", title: "تمشّي طويلاً والتقطي صوراً", titleEn: "Go for a long walk and take photos", icon: "camera-outline", category: "الهواء الطلق", categoryEn: "Outdoors", duration: "١ ساعة", durationEn: "1 hr", color: "#D5ECD4" },
-  { id: "a6", title: "جرّبي وصفة طبخ جديدة", titleEn: "Cook or bake something new", icon: "chef-hat", category: "الطبخ", categoryEn: "Cooking", duration: "١ ساعة", durationEn: "1 hr", color: "#FDEBD0" },
-  { id: "a7", title: "اقرئي كتاباً لمدة ٣٠ دقيقة", titleEn: "Read a book for 30 minutes", icon: "book-open-variant", category: "التعلم", categoryEn: "Learning", duration: "٣٠ دقيقة", durationEn: "30 min", color: "#C9DFF7" },
-  { id: "a8", title: "نظّمي خزانة ملابسك", titleEn: "Reorganize and clean your wardrobe", icon: "hanger", category: "المنزل", categoryEn: "Home", duration: "٢ ساعة", durationEn: "2 hrs", color: "#FBE4EC" },
-  { id: "a9", title: "تعلّمي ١٠ كلمات بلغة جديدة", titleEn: "Learn 10 words in a new language", icon: "translate", category: "التعلم", categoryEn: "Learning", duration: "٣٠ دقيقة", durationEn: "30 min", color: "#D8C9E8" },
-  { id: "a10", title: "جلسة يوغا ٢٠ دقيقة", titleEn: "Do a 20-minute yoga session", icon: "yoga", category: "اللياقة", categoryEn: "Fitness", duration: "٢٠ دقيقة", durationEn: "20 min", color: "#D5ECD4" },
-  { id: "a11", title: "ابدئي يومياتك أو bullet journal", titleEn: "Start a journal or bullet journal", icon: "notebook-edit-outline", category: "الإبداع", categoryEn: "Creativity", duration: "٤٥ دقيقة", durationEn: "45 min", color: "#F7C9D9" },
-  { id: "a12", title: "صنّفي قوائم تشغيل لكل مزاج", titleEn: "Make a playlist for every mood", icon: "music-note", category: "الموسيقى", categoryEn: "Music", duration: "١ ساعة", durationEn: "1 hr", color: "#D8C9E8" },
-  { id: "a13", title: "ارسمي أو خطّطي بحرية", titleEn: "Draw or sketch something", icon: "pencil-ruler", category: "الإبداع", categoryEn: "Creativity", duration: "١ ساعة", durationEn: "1 hr", color: "#FDEBD0" },
-  { id: "a14", title: "شاهدي وثائقياً ممتعاً", titleEn: "Watch a documentary", icon: "television-play", category: "التعلم", categoryEn: "Learning", duration: "١ ساعة", durationEn: "1 hr", color: "#C9DFF7" },
-  { id: "a15", title: "اكتبي قائمة أحلامك الـ١٠٠", titleEn: "Write your top 100 dreams list", icon: "star-outline", category: "التأمل", categoryEn: "Reflection", duration: "١ ساعة", durationEn: "1 hr", color: "#F7C9D9" },
-  { id: "a16", title: "تعلّمي لعبة ورق جديدة", titleEn: "Learn a new card game", icon: "cards-playing", category: "الألعاب", categoryEn: "Games", duration: "٣٠ دقيقة", durationEn: "30 min", color: "#FBE4EC" },
-  { id: "a17", title: "جرّبي ماسك جديد للبشرة", titleEn: "Try a new skincare face mask", icon: "face-woman-shimmer-outline", category: "الجمال", categoryEn: "Beauty", duration: "٣٠ دقيقة", durationEn: "30 min", color: "#F7C9D9" },
-  { id: "a18", title: "اكتبي شعراً أو قصة قصيرة", titleEn: "Write poetry or short stories", icon: "typewriter", category: "الإبداع", categoryEn: "Creativity", duration: "١ ساعة", durationEn: "1 hr", color: "#D8C9E8" },
-  { id: "a19", title: "نظّفي مكتبك بعمق", titleEn: "Deep clean your desk or workspace", icon: "broom", category: "المنزل", categoryEn: "Home", duration: "٤٥ دقيقة", durationEn: "45 min", color: "#FBE4EC" },
-  { id: "a20", title: "تصلي أو زوري أحد أجدادك", titleEn: "Call or visit a grandparent", icon: "phone-outline", category: "التواصل", categoryEn: "Connection", duration: "٣٠ دقيقة", durationEn: "30 min", color: "#FDEBD0" },
-  { id: "a21", title: "تعلّمي فن الأوريغامي", titleEn: "Learn origami with paper", icon: "star-four-points-outline", category: "الإبداع", categoryEn: "Creativity", duration: "٤٥ دقيقة", durationEn: "45 min", color: "#D5ECD4" },
-  { id: "a22", title: "احلّي أحجية (١٠٠+ قطعة)", titleEn: "Do a puzzle (100+ pieces)", icon: "puzzle-outline", category: "الألعاب", categoryEn: "Games", duration: "٢ ساعة", durationEn: "2 hrs", color: "#C9DFF7" },
-  { id: "a23", title: "جهّزي وجبات خفيفة صحية", titleEn: "Meal prep healthy snacks", icon: "food-apple-outline", category: "الطبخ", categoryEn: "Cooking", duration: "١ ساعة", durationEn: "1 hr", color: "#D5ECD4" },
-  { id: "a24", title: "صنّعي قائمة موسيقى للدراسة", titleEn: "Create a study-with-me playlist", icon: "playlist-music", category: "الدراسة", categoryEn: "Study", duration: "٣٠ دقيقة", durationEn: "30 min", color: "#D8C9E8" },
-  { id: "a25", title: "دهان أظافرك بتصميم مميز", titleEn: "Paint your nails with a fun design", icon: "nail", category: "الجمال", categoryEn: "Beauty", duration: "٤٥ دقيقة", durationEn: "45 min", color: "#F7C9D9" },
-  { id: "a26", title: "تعلّمي التأمل (٥ دقائق)", titleEn: "Learn to meditate (5 min)", icon: "meditation", category: "الصحة", categoryEn: "Wellness", duration: "١٥ دقيقة", durationEn: "15 min", color: "#D8C9E8" },
-  { id: "a27", title: "رتّبي صورك القديمة في ألبوم", titleEn: "Sort through old photos and create an album", icon: "image-outline", category: "الذكريات", categoryEn: "Memories", duration: "١ ساعة", durationEn: "1 hr", color: "#FDEBD0" },
-  { id: "a28", title: "اكتبي قيمك الشخصية", titleEn: "Write down your personal values", icon: "heart-outline", category: "التأمل", categoryEn: "Reflection", duration: "٣٠ دقيقة", durationEn: "30 min", color: "#F7C9D9" },
-  { id: "a29", title: "جرّبي حرفة جديدة (كروشيه، خط)", titleEn: "Try a new craft (crochet, knitting, calligraphy)", icon: "scissors-cutting", category: "الإبداع", categoryEn: "Creativity", duration: "٢ ساعة", durationEn: "2 hrs", color: "#FBE4EC" },
-  { id: "a30", title: "ابحثي عن مكان تودّين زيارته", titleEn: "Research a place you want to visit", icon: "earth", category: "الأحلام", categoryEn: "Dreams", duration: "٤٥ دقيقة", durationEn: "45 min", color: "#C9DFF7" },
+  { id: "a1",  title: "رتّبي غرفتك من جديد",                     titleEn: "Rearrange your room",                            imageKey: "room",       duration: "١-٢ ساعة",    durationEn: "1-2 hrs" },
+  { id: "a2",  title: "ابدئي لوحة أحلامك",                        titleEn: "Start a vision board",                           imageKey: "creativity", duration: "١ ساعة",      durationEn: "1 hr"    },
+  { id: "a3",  title: "اكتبي رسالة لنفسك المستقبلية",              titleEn: "Write a letter to your future self",             imageKey: "writing",    duration: "٣٠ دقيقة",    durationEn: "30 min"  },
+  { id: "a4",  title: "تعلّمي تسريحة شعر جديدة",                  titleEn: "Learn a new hairstyle from a tutorial",          imageKey: "beauty",     duration: "٤٥ دقيقة",    durationEn: "45 min"  },
+  { id: "a5",  title: "تمشّي طويلاً والتقطي صوراً",               titleEn: "Go for a long walk and take photos",             imageKey: "nature",     duration: "١ ساعة",      durationEn: "1 hr"    },
+  { id: "a6",  title: "جرّبي وصفة طبخ جديدة",                     titleEn: "Cook or bake something new",                     imageKey: "cooking",    duration: "١ ساعة",      durationEn: "1 hr"    },
+  { id: "a7",  title: "اقرئي كتاباً لمدة ٣٠ دقيقة",              titleEn: "Read a book for 30 minutes",                    imageKey: "reading",    duration: "٣٠ دقيقة",    durationEn: "30 min"  },
+  { id: "a8",  title: "نظّمي خزانة ملابسك",                       titleEn: "Reorganize and clean your wardrobe",             imageKey: "room",       duration: "٢ ساعة",      durationEn: "2 hrs"   },
+  { id: "a9",  title: "تعلّمي ١٠ كلمات بلغة جديدة",              titleEn: "Learn 10 words in a new language",              imageKey: "reading",    duration: "٣٠ دقيقة",    durationEn: "30 min"  },
+  { id: "a10", title: "جلسة يوغا ٢٠ دقيقة",                      titleEn: "Do a 20-minute yoga session",                   imageKey: "fitness",    duration: "٢٠ دقيقة",    durationEn: "20 min"  },
+  { id: "a11", title: "ابدئي يومياتك أو bullet journal",          titleEn: "Start a journal or bullet journal",             imageKey: "writing",    duration: "٤٥ دقيقة",    durationEn: "45 min"  },
+  { id: "a12", title: "صنّفي قوائم تشغيل لكل مزاج",              titleEn: "Make a playlist for every mood",                imageKey: "music",      duration: "١ ساعة",      durationEn: "1 hr"    },
+  { id: "a13", title: "ارسمي أو خطّطي بحرية",                    titleEn: "Draw or sketch something",                      imageKey: "creativity", duration: "١ ساعة",      durationEn: "1 hr"    },
+  { id: "a14", title: "شاهدي وثائقياً ممتعاً",                   titleEn: "Watch a documentary",                           imageKey: "reading",    duration: "١ ساعة",      durationEn: "1 hr"    },
+  { id: "a15", title: "اكتبي قائمة أحلامك الـ١٠٠",               titleEn: "Write your top 100 dreams list",                imageKey: "writing",    duration: "١ ساعة",      durationEn: "1 hr"    },
+  { id: "a16", title: "تعلّمي لعبة ورق جديدة",                   titleEn: "Learn a new card game",                         imageKey: "games",      duration: "٣٠ دقيقة",    durationEn: "30 min"  },
+  { id: "a17", title: "جرّبي ماسك جديد للبشرة",                  titleEn: "Try a new skincare face mask",                  imageKey: "beauty",     duration: "٣٠ دقيقة",    durationEn: "30 min"  },
+  { id: "a18", title: "اكتبي شعراً أو قصة قصيرة",               titleEn: "Write poetry or short stories",                 imageKey: "writing",    duration: "١ ساعة",      durationEn: "1 hr"    },
+  { id: "a19", title: "نظّفي مكتبك بعمق",                        titleEn: "Deep clean your desk or workspace",             imageKey: "room",       duration: "٤٥ دقيقة",    durationEn: "45 min"  },
+  { id: "a20", title: "تصلي أو زوري أحد أجدادك",                 titleEn: "Call or visit a grandparent",                   imageKey: "nature",     duration: "٣٠ دقيقة",    durationEn: "30 min"  },
+  { id: "a21", title: "تعلّمي فن الأوريغامي",                    titleEn: "Learn origami with paper",                      imageKey: "creativity", duration: "٤٥ دقيقة",    durationEn: "45 min"  },
+  { id: "a22", title: "احلّي أحجية (١٠٠+ قطعة)",                 titleEn: "Do a puzzle (100+ pieces)",                     imageKey: "games",      duration: "٢ ساعة",      durationEn: "2 hrs"   },
+  { id: "a23", title: "جهّزي وجبات خفيفة صحية",                  titleEn: "Meal prep healthy snacks",                      imageKey: "cooking",    duration: "١ ساعة",      durationEn: "1 hr"    },
+  { id: "a24", title: "صنّعي قائمة موسيقى للدراسة",              titleEn: "Create a study-with-me playlist",               imageKey: "music",      duration: "٣٠ دقيقة",    durationEn: "30 min"  },
+  { id: "a25", title: "دهان أظافرك بتصميم مميز",                 titleEn: "Paint your nails with a fun design",            imageKey: "beauty",     duration: "٤٥ دقيقة",    durationEn: "45 min"  },
+  { id: "a26", title: "تعلّمي التأمل (٥ دقائق)",                 titleEn: "Learn to meditate (5 min)",                     imageKey: "fitness",    duration: "١٥ دقيقة",    durationEn: "15 min"  },
+  { id: "a27", title: "رتّبي صورك القديمة في ألبوم",             titleEn: "Sort through old photos and create an album",   imageKey: "reading",    duration: "١ ساعة",      durationEn: "1 hr"    },
+  { id: "a28", title: "اكتبي قيمك الشخصية",                      titleEn: "Write down your personal values",               imageKey: "writing",    duration: "٣٠ دقيقة",    durationEn: "30 min"  },
+  { id: "a29", title: "جرّبي حرفة جديدة (كروشيه، خط)",          titleEn: "Try a new craft (crochet, knitting, calligraphy)", imageKey: "creativity", duration: "٢ ساعة",   durationEn: "2 hrs"   },
+  { id: "a30", title: "ابحثي عن مكان تودّين زيارته",             titleEn: "Research a place you want to visit",            imageKey: "nature",     duration: "٤٥ دقيقة",    durationEn: "45 min"  },
 ];
 
 export const DETOX_CHALLENGES = [
