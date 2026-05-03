@@ -4,10 +4,11 @@ import { useColors } from "@/hooks/useColors";
 import { useLanguage } from "@/contexts/LanguageContext";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import {
   Alert,
   Animated,
+  Dimensions,
   Platform,
   Pressable,
   ScrollView,
@@ -16,7 +17,11 @@ import {
   TextInput,
   View,
 } from "react-native";
+
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const STRIP_WIDTH = SCREEN_WIDTH - 32;
 
 // ─── Mood definitions ───────────────────────────────────────────────────────
 
@@ -61,71 +66,167 @@ function getMoodByKey(key: string) {
   return MOODS.find((m) => m.key === key) ?? MOODS[0];
 }
 
-// ─── Week strip ─────────────────────────────────────────────────────────────
+// ─── Swipeable week strip ────────────────────────────────────────────────────
 
-function WeekStrip({ entries }: { entries: { [k: string]: DiaryEntry } }) {
-  const colors = useColors();
-  const { t } = useLanguage();
+const MONTH_PALETTES = [
+  { bg: "#FFF0F5", accent: "#F06292", ring: "#F0629230" }, // Jan — rose
+  { bg: "#FFF3E0", accent: "#FF8A65", ring: "#FF8A6530" }, // Feb — coral
+  { bg: "#EDFBF2", accent: "#4CAF88", ring: "#4CAF8830" }, // Mar — mint
+  { bg: "#FCE4EC", accent: "#E91E8C", ring: "#E91E8C30" }, // Apr — hot pink
+  { bg: "#E0FAFA", accent: "#00BCD4", ring: "#00BCD430" }, // May — teal
+  { bg: "#FFFDE7", accent: "#F9A825", ring: "#F9A82530" }, // Jun — gold
+  { bg: "#FFF1EC", accent: "#FF5722", ring: "#FF572230" }, // Jul — orange
+  { bg: "#F3E5F5", accent: "#9C27B0", ring: "#9C27B030" }, // Aug — violet
+  { bg: "#EDE7F6", accent: "#673AB7", ring: "#673AB730" }, // Sep — deep purple
+  { bg: "#E1F5FE", accent: "#0288D1", ring: "#0288D130" }, // Oct — sky
+  { bg: "#F5F9E6", accent: "#7CB342", ring: "#7CB34230" }, // Nov — olive
+  { bg: "#ECEFF1", accent: "#546E7A", ring: "#546E7A30" }, // Dec — slate
+];
+
+const WEEKS_COUNT = 26; // ~6 months back
+
+function generateWeeks(count: number) {
   const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  // Align to Sunday start
+  const currentSunday = new Date(today);
+  currentSunday.setDate(today.getDate() - today.getDay());
 
-  const days = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(today);
-    d.setDate(today.getDate() - 6 + i);
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    const entry = entries[key];
-    const mood = entry ? getMoodByKey(entry.mood) : null;
-    const isToday = i === 6;
-    const dayLabel = t.diary.weekDays[d.getDay()];
-    return { key, dayLabel, mood, isToday, dayNum: d.getDate() };
+  const weeks: Array<Array<{ date: Date; key: string }>> = [];
+  for (let w = count - 1; w >= 0; w--) {
+    const week = [];
+    for (let d = 0; d < 7; d++) {
+      const date = new Date(currentSunday);
+      date.setDate(currentSunday.getDate() - w * 7 + d);
+      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+      week.push({ date, key });
+    }
+    weeks.push(week);
+  }
+  return weeks;
+}
+
+function SwipeableWeekStrip({ entries }: { entries: { [k: string]: DiaryEntry } }) {
+  const { t, isRTL } = useLanguage();
+  const scrollRef = useRef<ScrollView>(null);
+  const [visibleIdx, setVisibleIdx] = useState(WEEKS_COUNT - 1);
+  const todayK = todayKey();
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+
+  const weeks = useMemo(() => generateWeeks(WEEKS_COUNT), []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      scrollRef.current?.scrollTo({ x: (WEEKS_COUNT - 1) * STRIP_WIDTH, animated: false });
+    }, 80);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const handleScrollEnd = (e: any) => {
+    const idx = Math.round(e.nativeEvent.contentOffset.x / STRIP_WIDTH);
+    setVisibleIdx(Math.max(0, Math.min(WEEKS_COUNT - 1, idx)));
+  };
+
+  const visibleWeek = weeks[visibleIdx];
+  const palette = MONTH_PALETTES[visibleWeek[3].date.getMonth()];
+  const monthLabel = visibleWeek[3].date.toLocaleDateString(isRTL ? "ar-SA" : "en-US", {
+    month: "long",
+    year: "numeric",
   });
 
   return (
-    <View style={[stripStyles.row, { backgroundColor: colors.card, borderColor: colors.border }]}>
-      {days.map((day) => (
-        <View key={day.key} style={stripStyles.dayCol}>
-          <Text style={[stripStyles.dayLabel, { color: colors.mutedForeground }]}>{day.dayLabel}</Text>
-          <View
-            style={[
-              stripStyles.dot,
-              {
-                backgroundColor: day.mood
-                  ? day.mood.color
-                  : day.isToday
-                  ? colors.primary + "33"
-                  : colors.border,
-                borderWidth: day.isToday ? 2 : 0,
-                borderColor: colors.primary,
-              },
-            ]}
-          >
-            {day.mood ? (
-              <Text style={stripStyles.dotEmoji}>{day.mood.emoji}</Text>
-            ) : null}
-          </View>
-          <Text style={[stripStyles.dayNum, { color: day.isToday ? colors.primary : colors.foreground }]}>
-            {day.dayNum}
-          </Text>
-        </View>
-      ))}
+    <View style={swipeStyles.container}>
+      <View style={[swipeStyles.headerRow, { flexDirection: isRTL ? "row-reverse" : "row" }]}>
+        <Text style={[swipeStyles.monthLabel, { color: palette.accent }]}>{monthLabel}</Text>
+        <Text style={[swipeStyles.hint, { color: palette.accent + "99" }]}>
+          {isRTL ? "← اسحبي →" : "← swipe →"}
+        </Text>
+      </View>
+
+      <ScrollView
+        ref={scrollRef}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        onMomentumScrollEnd={handleScrollEnd}
+        scrollEventThrottle={32}
+        decelerationRate="fast"
+        snapToInterval={STRIP_WIDTH}
+        snapToAlignment="start"
+        style={swipeStyles.scrollView}
+      >
+        {weeks.map((week, wi) => {
+          const wPalette = MONTH_PALETTES[week[3].date.getMonth()];
+          return (
+            <View
+              key={wi}
+              style={[swipeStyles.weekPage, { width: STRIP_WIDTH, backgroundColor: wPalette.bg }]}
+            >
+              {week.map((day) => {
+                const entry = entries[day.key];
+                const mood = entry ? getMoodByKey(entry.mood) : null;
+                const isToday = day.key === todayK;
+                const isFuture = day.date > now;
+                const dayLabel = t.diary.weekDays[day.date.getDay()];
+                return (
+                  <View key={day.key} style={swipeStyles.dayCol}>
+                    <Text style={[swipeStyles.dayLabel, { color: wPalette.accent }]}>{dayLabel}</Text>
+                    <View
+                      style={[
+                        swipeStyles.dot,
+                        {
+                          backgroundColor: mood
+                            ? mood.color
+                            : isToday
+                            ? wPalette.accent + "33"
+                            : wPalette.ring,
+                          borderWidth: isToday ? 2.5 : 0,
+                          borderColor: wPalette.accent,
+                          opacity: isFuture ? 0.25 : 1,
+                        },
+                      ]}
+                    >
+                      {mood ? <Text style={swipeStyles.dotEmoji}>{mood.emoji}</Text> : null}
+                    </View>
+                    <Text
+                      style={[
+                        swipeStyles.dayNum,
+                        {
+                          color: isToday ? wPalette.accent : "#555",
+                          fontFamily: isToday ? "Inter_700Bold" : "Inter_400Regular",
+                        },
+                      ]}
+                    >
+                      {day.date.getDate()}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+          );
+        })}
+      </ScrollView>
     </View>
   );
 }
 
-const stripStyles = StyleSheet.create({
-  row: {
+const swipeStyles = StyleSheet.create({
+  container: { marginHorizontal: 16, marginBottom: 18 },
+  headerRow: { justifyContent: "space-between", alignItems: "center", marginBottom: 10, paddingHorizontal: 4 },
+  monthLabel: { fontSize: 15, fontFamily: "Inter_700Bold" },
+  hint: { fontSize: 11, fontFamily: "Inter_400Regular" },
+  scrollView: { borderRadius: 18, overflow: "hidden" },
+  weekPage: {
     flexDirection: "row",
     justifyContent: "space-around",
-    marginHorizontal: 16,
-    borderRadius: 18,
-    borderWidth: 1,
     paddingVertical: 14,
-    marginBottom: 18,
+    paddingHorizontal: 6,
   },
   dayCol: { alignItems: "center", gap: 6 },
-  dayLabel: { fontSize: 10, fontFamily: "Inter_500Medium" },
+  dayLabel: { fontSize: 10, fontFamily: "Inter_600SemiBold" },
   dot: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
   dotEmoji: { fontSize: 18 },
-  dayNum: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
+  dayNum: { fontSize: 11 },
 });
 
 // ─── Mood picker row ────────────────────────────────────────────────────────
@@ -477,7 +578,7 @@ export default function DiaryScreen() {
         </Text>
       </LinearGradient>
 
-      <WeekStrip entries={entries} />
+      <SwipeableWeekStrip entries={entries} />
 
       <TodayCard />
 
