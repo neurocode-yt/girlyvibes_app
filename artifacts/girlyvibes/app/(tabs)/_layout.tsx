@@ -1,12 +1,51 @@
 import { BlurView } from "expo-blur";
 import { Tabs } from "expo-router";
-import { AppFeather as Feather, AppIonicons as Ionicons, AppMaterialCommunityIcons as MaterialCommunityIcons, AppMaterialCommunityIcons as MaterialIcons } from "@/components/Icons";
+import {
+  AppFeather as Feather,
+  AppIonicons as Ionicons,
+  AppMaterialCommunityIcons as MaterialCommunityIcons,
+} from "@/components/Icons";
 import React from "react";
-import { Platform, StyleSheet, View } from "react-native";
+import { Platform, Pressable, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+} from "react-native-reanimated";
 
 import { useColors } from "@/hooks/useColors";
 import { useLanguage } from "@/contexts/LanguageContext";
+
+function AnimatedTabButton(props: any) {
+  const scale = useSharedValue(1);
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+    flex: 1,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+  }));
+
+  return (
+    <Pressable
+      onPress={props.onPress}
+      onLongPress={props.onLongPress}
+      onPressIn={() => {
+        scale.value = withSpring(0.78, { damping: 10, stiffness: 260 });
+      }}
+      onPressOut={() => {
+        scale.value = withSpring(1, { damping: 6, stiffness: 180 });
+      }}
+      accessibilityLabel={props.accessibilityLabel}
+      accessibilityRole={props.accessibilityRole}
+      accessibilityState={props.accessibilityState}
+      style={[props.style, { overflow: "hidden" }]}
+    >
+      <Animated.View style={animStyle}>{props.children}</Animated.View>
+    </Pressable>
+  );
+}
 
 export default function TabLayout() {
   const colors = useColors();
@@ -14,6 +53,8 @@ export default function TabLayout() {
   const { t } = useLanguage();
   const isIOS = Platform.OS === "ios";
   const isWeb = Platform.OS === "web";
+
+  const tabBarButton = (props: any) => <AnimatedTabButton {...props} />;
 
   return (
     <Tabs
@@ -50,6 +91,7 @@ export default function TabLayout() {
               ]}
             />
           ) : null,
+        tabBarButton,
       }}
     >
       <Tabs.Screen
@@ -66,7 +108,11 @@ export default function TabLayout() {
         options={{
           title: t.tabs.routines,
           tabBarIcon: ({ color }) => (
-            <MaterialCommunityIcons name="checkbox-marked-circle-outline" size={21} color={color} />
+            <MaterialCommunityIcons
+              name="checkbox-marked-circle-outline"
+              size={21}
+              color={color}
+            />
           ),
         }}
       />
@@ -75,7 +121,11 @@ export default function TabLayout() {
         options={{
           title: t.tabs.glowup,
           tabBarIcon: ({ color }) => (
-            <MaterialCommunityIcons name="star-outline" size={21} color={color} />
+            <MaterialCommunityIcons
+              name="star-outline"
+              size={21}
+              color={color}
+            />
           ),
         }}
       />
@@ -93,7 +143,11 @@ export default function TabLayout() {
         options={{
           title: t.chat.screenTitle,
           tabBarIcon: ({ color }) => (
-            <Ionicons name="chatbubble-ellipses-outline" size={21} color={color} />
+            <Ionicons
+              name="chatbubble-ellipses-outline"
+              size={21}
+              color={color}
+            />
           ),
         }}
       />
@@ -102,7 +156,11 @@ export default function TabLayout() {
         options={{
           title: t.tabs.boredom,
           tabBarIcon: ({ color }) => (
-            <MaterialCommunityIcons name="dice-5-outline" size={21} color={color} />
+            <MaterialCommunityIcons
+              name="dice-5-outline"
+              size={21}
+              color={color}
+            />
           ),
         }}
       />

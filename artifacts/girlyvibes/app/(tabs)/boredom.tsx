@@ -1,10 +1,9 @@
 import { AppMaterialCommunityIcons as MaterialCommunityIcons } from "@/components/Icons";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
-  Animated,
-  Image,
+  LayoutAnimation,
   Platform,
   Pressable,
   ScrollView,
@@ -12,7 +11,22 @@ import {
   Text,
   View,
 } from "react-native";
+import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Animated, {
+  cancelAnimation,
+  FadeInDown,
+  SharedValue,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withRepeat,
+  withSequence,
+  withSpring,
+  withTiming,
+  runOnJS,
+} from "react-native-reanimated";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 
 import { useApp } from "@/contexts/AppContext";
 import { DETOX_CHALLENGES, type Activity } from "@/data/boredom";
@@ -21,75 +35,319 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useActivities } from "@/hooks/useActivities";
 import { getActivityImage } from "@/lib/activityImages";
 
-function ActivityCard({
-  activity,
-  highlighted,
-}: {
-  activity: Activity;
-  highlighted: boolean;
-}) {
-  const colors = useColors();
-  const { l } = useLanguage();
-  const image = getActivityImage(activity.imageKey);
+const CARD_SLOT = 248;
+
+// ─── Floating Heart ────────────────────────────────────────────────────────────
+
+interface HeartConfig {
+  top?: number;
+  bottom?: number;
+  left?: number;
+  right?: number;
+  size: number;
+  delay: number;
+  ampX: number;
+  ampY: number;
+}
+
+const HEART_CONFIGS: HeartConfig[] = [
+  { top: -6,  left: 2,   size: 18, delay: 0,   ampX: 3,  ampY: 6 },
+  { top: 14,  left: 20,  size: 13, delay: 200, ampX: 4,  ampY: 5 },
+  { top: 2,   left: 36,  size: 11, delay: 400, ampX: 5,  ampY: 7 },
+  { top: -6,  right: 2,  size: 18, delay: 100, ampX: -3, ampY: 6 },
+  { top: 14,  right: 20, size: 13, delay: 300, ampX: -4, ampY: 5 },
+  { top: 2,   right: 36, size: 11, delay: 500, ampX: -5, ampY: 7 },
+  { bottom: -6,  left: 2,   size: 18, delay: 150, ampX: 3,  ampY: -6 },
+  { bottom: 14,  left: 20,  size: 13, delay: 350, ampX: 4,  ampY: -5 },
+  { bottom: 2,   left: 36,  size: 11, delay: 50,  ampX: 5,  ampY: -7 },
+  { bottom: -6,  right: 2,  size: 18, delay: 250, ampX: -3, ampY: -6 },
+  { bottom: 14,  right: 20, size: 13, delay: 450, ampX: -4, ampY: -5 },
+  { bottom: 2,   right: 36, size: 11, delay: 80,  ampX: -5, ampY: -7 },
+];
+
+function FloatingHeart({ cfg, isVisible }: { cfg: HeartConfig; isVisible: boolean }) {
+  const wobbleX = useSharedValue(0);
+  const wobbleY = useSharedValue(0);
+  const opacity = useSharedValue(0);
+
+  useEffect(() => {
+    if (isVisible) {
+      opacity.value = withDelay(cfg.delay, withTiming(0.3, { duration: 250 }));
+      wobbleX.value = withDelay(
+        cfg.delay,
+        withRepeat(
+          withSequence(
+            withTiming(cfg.ampX, { duration: 700 }),
+            withTiming(-cfg.ampX * 0.5, { duration: 700 }),
+          ),
+          -1,
+          true,
+        ),
+      );
+      wobbleY.value = withDelay(
+        cfg.delay,
+        withRepeat(
+          withSequence(
+            withTiming(cfg.ampY, { duration: 600 }),
+            withTiming(cfg.ampY * 0.3, { duration: 600 }),
+          ),
+          -1,
+          true,
+        ),
+      );
+    } else {
+      cancelAnimation(wobbleX);
+      cancelAnimation(wobbleY);
+      opacity.value = withTiming(0, { duration: 150 });
+      wobbleX.value = withTiming(0, { duration: 200 });
+      wobbleY.value = withTiming(0, { duration: 200 });
+    }
+  }, [isVisible]);
+
+  const animStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [
+      { translateX: wobbleX.value },
+      { translateY: wobbleY.value },
+    ],
+  }));
+
+  const pos: Record<string, number> = {};
+  if (cfg.top    !== undefined) pos.top    = cfg.top;
+  if (cfg.bottom !== undefined) pos.bottom = cfg.bottom;
+  if (cfg.left   !== undefined) pos.left   = cfg.left;
+  if (cfg.right  !== undefined) pos.right  = cfg.right;
 
   return (
-    <View
-      style={[
-        styles.card,
-        {
-          borderColor: highlighted ? colors.primary : colors.border,
-          borderWidth: highlighted ? 2 : 1,
-        },
-      ]}
-    >
-      <View style={styles.cardImageWrapper}>
-        <Image source={image} style={styles.cardImage} resizeMode="cover" />
-        {highlighted && (
-          <View style={[styles.cardHighlightBadge, { backgroundColor: colors.primary }]}>
-            <MaterialCommunityIcons name="star-four-points" size={12} color="#fff" />
-            <Text style={styles.cardHighlightBadgeText}>
-              {l("مقترحة", "Pick this!")}
-            </Text>
-          </View>
-        )}
-        <LinearGradient
-          colors={["transparent", "rgba(0,0,0,0.55)"]}
-          style={styles.cardImageOverlay}
-        />
-        <View style={styles.cardDurationBadge}>
-          <Text style={styles.cardDurationText}>
-            {l(activity.duration, activity.durationEn)}
-          </Text>
-        </View>
-      </View>
+    <Animated.View style={[styles.heart, pos, animStyle]}>
+      <Text style={{ fontSize: cfg.size }}>🩷</Text>
+    </Animated.View>
+  );
+}
 
-      <View style={[styles.cardBody, { backgroundColor: highlighted ? colors.highlight : colors.card }]}>
-        <Text
-          style={[styles.cardTitle, { color: highlighted ? colors.primary : colors.foreground }]}
-          numberOfLines={2}
-        >
-          {l(activity.title, activity.titleEn)}
-        </Text>
-      </View>
+function FloatingHeartsOverlay({ visible }: { visible: boolean }) {
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      {HEART_CONFIGS.map((cfg, i) => (
+        <FloatingHeart key={i} cfg={cfg} isVisible={visible} />
+      ))}
     </View>
   );
 }
 
-function ActivityList({ highlighted }: { highlighted: string | null }) {
+// ─── Draggable Card ────────────────────────────────────────────────────────────
+
+interface DragSharedValues {
+  dragY: SharedValue<number>;
+  draggingIndex: SharedValue<number>;
+  orderedIds: SharedValue<string[]>;
+  allShifts: SharedValue<Record<string, number>>;
+  totalCount: number;
+}
+
+interface DraggableCardProps {
+  activity: Activity;
+  index: number;
+  highlighted: boolean;
+  drag: DragSharedValues;
+  onDragStart: (index: number) => void;
+  commitOrder: (from: number, to: number) => void;
+}
+
+function DraggableCard({
+  activity,
+  index,
+  highlighted,
+  drag,
+  onDragStart,
+  commitOrder,
+}: DraggableCardProps) {
+  const colors = useColors();
+  const { l } = useLanguage();
+  const image = getActivityImage(activity.imageKey);
+  const [isActive, setIsActive] = useState(false);
+
+  const { dragY, draggingIndex, orderedIds, allShifts, totalCount } = drag;
+
+  const gesture = Gesture.Pan()
+    .activateAfterLongPress(420)
+    .onStart(() => {
+      draggingIndex.value = index;
+      runOnJS(setIsActive)(true);
+      runOnJS(onDragStart)(index);
+    })
+    .onUpdate((e) => {
+      dragY.value = e.translationY;
+      const di = draggingIndex.value;
+      const ids = orderedIds.value;
+      const count = ids.length;
+      const ti = Math.max(0, Math.min(count - 1, di + Math.round(e.translationY / CARD_SLOT)));
+      const shifts: Record<string, number> = {};
+      for (let j = 0; j < count; j++) {
+        if (j === di) continue;
+        if (di < ti && j > di && j <= ti) shifts[ids[j]] = -CARD_SLOT;
+        else if (di > ti && j < di && j >= ti) shifts[ids[j]] = CARD_SLOT;
+      }
+      allShifts.value = shifts;
+    })
+    .onEnd(() => {
+      const di = draggingIndex.value;
+      const count = orderedIds.value.length;
+      const ti = Math.max(0, Math.min(count - 1, di + Math.round(dragY.value / CARD_SLOT)));
+      runOnJS(commitOrder)(di, ti);
+      dragY.value = withSpring(0, { damping: 14 });
+      draggingIndex.value = -1;
+      allShifts.value = {};
+      runOnJS(setIsActive)(false);
+    })
+    .onFinalize(() => {
+      if (draggingIndex.value !== -1) {
+        dragY.value = withSpring(0, { damping: 14 });
+        draggingIndex.value = -1;
+        allShifts.value = {};
+        runOnJS(setIsActive)(false);
+      }
+    });
+
+  const animStyle = useAnimatedStyle(() => {
+    const isDragging = draggingIndex.value === index;
+    const shift = allShifts.value[activity.id] ?? 0;
+    return {
+      transform: [
+        { translateY: isDragging ? dragY.value : shift },
+        { scale: isDragging ? 1.03 : 1 },
+      ],
+      zIndex: isDragging ? 200 : 1,
+      shadowOpacity: isDragging ? 0.35 : 0,
+      shadowRadius: isDragging ? 18 : 0,
+      shadowOffset: { width: 0, height: isDragging ? 8 : 0 },
+      shadowColor: "#000",
+      elevation: isDragging ? 12 : 0,
+    };
+  });
+
+  return (
+    <Animated.View entering={FadeInDown.delay(index * 55).duration(480).springify()}>
+    <GestureDetector gesture={gesture}>
+      <Animated.View style={[styles.cardOuter, animStyle]}>
+        <FloatingHeartsOverlay visible={isActive} />
+
+        <View
+          style={[
+            styles.card,
+            {
+              borderColor: highlighted ? colors.primary : colors.border,
+              borderWidth: highlighted ? 2 : 1,
+            },
+          ]}
+        >
+          <View style={styles.cardImageWrapper}>
+            <Image source={image} style={styles.cardImage} contentFit="cover" />
+            {highlighted && (
+              <View style={[styles.cardHighlightBadge, { backgroundColor: colors.primary }]}>
+                <MaterialCommunityIcons name="star-four-points" size={12} color="#fff" />
+                <Text style={styles.cardHighlightBadgeText}>{l("مقترحة", "Pick this!")}</Text>
+              </View>
+            )}
+            <LinearGradient
+              colors={["transparent", "rgba(0,0,0,0.55)"]}
+              style={StyleSheet.absoluteFill}
+            />
+            <View style={styles.cardDurationBadge}>
+              <Text style={styles.cardDurationText}>
+                {l(activity.duration, activity.durationEn)}
+              </Text>
+            </View>
+            {isActive && (
+              <View style={[styles.dragHint, { backgroundColor: "rgba(0,0,0,0.45)" }]}>
+                <MaterialCommunityIcons name="drag-vertical" size={20} color="#fff" />
+              </View>
+            )}
+          </View>
+
+          <View style={[styles.cardBody, { backgroundColor: highlighted ? colors.highlight : colors.card }]}>
+            <Text
+              style={[styles.cardTitle, { color: highlighted ? colors.primary : colors.foreground }]}
+              numberOfLines={2}
+            >
+              {l(activity.title, activity.titleEn)}
+            </Text>
+          </View>
+        </View>
+      </Animated.View>
+    </GestureDetector>
+    </Animated.View>
+  );
+}
+
+// ─── Sortable Activity List ────────────────────────────────────────────────────
+
+interface SortableListProps {
+  highlighted: string | null;
+  onScrollToggle: (enabled: boolean) => void;
+}
+
+function SortableActivityList({ highlighted, onScrollToggle }: SortableListProps) {
   const { activities } = useActivities();
+  const [orderedItems, setOrderedItems] = useState<Activity[]>(activities);
+
+  useEffect(() => {
+    setOrderedItems(activities);
+  }, [activities]);
+
+  const dragY = useSharedValue(0);
+  const draggingIndex = useSharedValue(-1);
+  const orderedIds = useSharedValue<string[]>(orderedItems.map((i) => i.id));
+  const allShifts = useSharedValue<Record<string, number>>({});
+
+  useEffect(() => {
+    orderedIds.value = orderedItems.map((i) => i.id);
+  }, [orderedItems]);
+
+  const drag: DragSharedValues = {
+    dragY,
+    draggingIndex,
+    orderedIds,
+    allShifts,
+    totalCount: orderedItems.length,
+  };
+
+  const onDragStart = (index: number) => {
+    onScrollToggle(false);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  };
+
+  const commitOrder = (from: number, to: number) => {
+    onScrollToggle(true);
+    if (from === to) return;
+    const newItems = [...orderedItems];
+    const [moved] = newItems.splice(from, 1);
+    newItems.splice(to, 0, moved);
+    if (Platform.OS !== "web") {
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    }
+    setOrderedItems(newItems);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  };
 
   return (
     <View style={styles.list}>
-      {activities.map((activity) => (
-        <ActivityCard
+      {orderedItems.map((activity, index) => (
+        <DraggableCard
           key={activity.id}
           activity={activity}
+          index={index}
           highlighted={highlighted === activity.id}
+          drag={drag}
+          onDragStart={onDragStart}
+          commitOrder={commitOrder}
         />
       ))}
     </View>
   );
 }
+
+// ─── Detox Section ─────────────────────────────────────────────────────────────
 
 function DetoxSection() {
   const colors = useColors();
@@ -132,12 +390,8 @@ function DetoxSection() {
               }}
             >
               <View style={[styles.challengeDayBadge, { backgroundColor: ch.color }]}>
-                <Text style={[styles.challengeDayNum, { color: colors.primary }]}>
-                  {ch.days}
-                </Text>
-                <Text style={[styles.challengeDayText, { color: colors.primary }]}>
-                  {t.boredom.days}
-                </Text>
+                <Text style={[styles.challengeDayNum, { color: colors.primary }]}>{ch.days}</Text>
+                <Text style={[styles.challengeDayText, { color: colors.primary }]}>{t.boredom.days}</Text>
               </View>
               <View style={{ flex: 1, marginLeft: 12 }}>
                 <Text style={[styles.challengeName, { color: colors.foreground }]}>
@@ -162,7 +416,6 @@ function DetoxSection() {
       <Text style={[styles.detoxTitle, { color: colors.foreground }]}>
         {l(activeChallenge.title, activeChallenge.titleEn)}
       </Text>
-
       <View style={[styles.activeChallenge, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <View style={styles.challengeProgress}>
           <Text style={[styles.challengeProgressText, { color: colors.foreground }]}>
@@ -183,7 +436,6 @@ function DetoxSection() {
             ]}
           />
         </View>
-
         <View style={styles.challengeRules}>
           {(l("ar", "en") === "ar" ? activeChallenge.rules : activeChallenge.rulesEn).map((rule, i) => (
             <View key={i} style={styles.ruleRow}>
@@ -192,7 +444,6 @@ function DetoxSection() {
             </View>
           ))}
         </View>
-
         {!checkedToday ? (
           <Pressable
             style={[styles.checkInBtn, { backgroundColor: colors.primary }]}
@@ -217,34 +468,42 @@ function DetoxSection() {
   );
 }
 
+// ─── Main Screen ───────────────────────────────────────────────────────────────
+
 export default function BoredomScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { t, l } = useLanguage();
   const { activities } = useActivities();
   const [highlighted, setHighlighted] = useState<string | null>(null);
-  const spinAnim = useRef(new Animated.Value(0)).current;
+  const [scrollEnabled, setScrollEnabled] = useState(true);
+  const scrollRef = useRef<ScrollView>(null);
 
+  const spinValue = useSharedValue(0);
   const topInset = Platform.OS === "web" ? 67 : insets.top;
 
   function surprise() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    Animated.sequence([
-      Animated.timing(spinAnim, { toValue: 1, duration: 300, useNativeDriver: true }),
-      Animated.timing(spinAnim, { toValue: 0, duration: 0, useNativeDriver: true }),
-    ]).start();
+    spinValue.value = withSequence(
+      withTiming(1, { duration: 300 }),
+      withTiming(0, { duration: 0 }),
+    );
     const random = activities[Math.floor(Math.random() * activities.length)];
     setHighlighted(random.id);
     setTimeout(() => setHighlighted(null), 4000);
   }
 
-  const spin = spinAnim.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] });
+  const spinStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${spinValue.value * 360}deg` }],
+  }));
 
   return (
     <ScrollView
+      ref={scrollRef}
       style={[styles.container, { backgroundColor: colors.background }]}
       contentContainerStyle={{ paddingBottom: Platform.OS === "web" ? 100 : 120 }}
       showsVerticalScrollIndicator={false}
+      scrollEnabled={scrollEnabled}
     >
       <LinearGradient
         colors={[colors.card, colors.background]}
@@ -257,15 +516,24 @@ export default function BoredomScreen() {
           {t.boredom.screenSubtitle}
         </Text>
 
-        <Pressable style={[styles.surpriseBtn, { backgroundColor: colors.primary }]} onPress={surprise}>
-          <Animated.View style={{ transform: [{ rotate: spin }] }}>
+        <Pressable
+          style={[styles.surpriseBtn, { backgroundColor: colors.primary }]}
+          onPress={surprise}
+        >
+          <Animated.View style={spinStyle}>
             <MaterialCommunityIcons name="dice-5-outline" size={22} color="#fff" />
           </Animated.View>
           <Text style={styles.surpriseBtnText}>{t.boredom.surpriseMe}</Text>
         </Pressable>
 
         {highlighted && (
-          <View style={[styles.highlightBanner, { backgroundColor: colors.highlight, borderColor: colors.primary }]}>
+          <Animated.View
+            entering={FadeInDown.duration(300).springify()}
+            style={[
+              styles.highlightBanner,
+              { backgroundColor: colors.highlight, borderColor: colors.primary },
+            ]}
+          >
             <MaterialCommunityIcons name="star-four-points" size={16} color={colors.primary} />
             <Text style={[styles.highlightText, { color: colors.primary }]}>
               {t.boredom.try}{" "}
@@ -276,7 +544,7 @@ export default function BoredomScreen() {
                 })()}
               </Text>
             </Text>
-          </View>
+          </Animated.View>
         )}
       </LinearGradient>
 
@@ -284,12 +552,22 @@ export default function BoredomScreen() {
         <Text style={[styles.sectionLabel, { color: colors.foreground }]}>
           {t.boredom.offlineIdeas}
         </Text>
-        <ActivityList highlighted={highlighted} />
+        <Text style={[styles.sectionHint, { color: colors.mutedForeground }]}>
+          {l("اضغطي مطولاً لإعادة الترتيب", "Hold to reorder")}
+        </Text>
+
+        <SortableActivityList
+          highlighted={highlighted}
+          onScrollToggle={setScrollEnabled}
+        />
+
         <DetoxSection />
       </View>
     </ScrollView>
   );
 }
+
+// ─── Styles ────────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
@@ -340,12 +618,23 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontSize: 17,
     fontFamily: "Inter_600SemiBold",
-    marginBottom: 12,
+    marginBottom: 4,
     marginTop: 8,
+  },
+  sectionHint: {
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    marginBottom: 12,
   },
   list: {
     gap: 14,
     marginBottom: 28,
+  },
+  cardOuter: {
+    borderRadius: 20,
+  },
+  heart: {
+    position: "absolute",
   },
   card: {
     borderRadius: 20,
@@ -360,9 +649,6 @@ const styles = StyleSheet.create({
   cardImage: {
     width: "100%",
     height: "100%",
-  },
-  cardImageOverlay: {
-    ...StyleSheet.absoluteFillObject,
   },
   cardHighlightBadge: {
     position: "absolute",
@@ -389,11 +675,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 20,
+    zIndex: 2,
   },
   cardDurationText: {
     color: "#fff",
     fontSize: 11,
     fontFamily: "Inter_500Medium",
+  },
+  dragHint: {
+    position: "absolute",
+    top: 10,
+    right: 12,
+    borderRadius: 20,
+    padding: 6,
+    zIndex: 2,
   },
   cardBody: {
     paddingHorizontal: 16,
