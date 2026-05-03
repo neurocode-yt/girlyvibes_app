@@ -565,8 +565,8 @@ function makeBlock(o?: Partial<RichBlock>): RichBlock {
 }
 
 function blockFontFamily(block: RichBlock): string {
-  if (block.fontStyle === "serif") return Platform.select({ ios: "Georgia", android: "serif", default: "Georgia, serif" }) ?? "serif";
-  if (block.fontStyle === "mono")  return Platform.select({ ios: "Courier New", android: "monospace", default: "Courier New, monospace" }) ?? "monospace";
+  if (block.fontStyle === "serif") return "serif";
+  if (block.fontStyle === "mono")  return "monospace";
   const heading = block.type === "h1" || block.type === "h2";
   if (block.bold || heading) return "Inter_700Bold";
   if (block.type === "h3") return "Inter_600SemiBold";
@@ -585,7 +585,7 @@ function containsEmoji(text: string): boolean {
 
 const EMOJI_SLIDER_TRACK = 160;
 const EMOJI_SCALE_MIN = 1.0;
-const EMOJI_SCALE_MAX = 3.0;
+const EMOJI_SCALE_MAX = 20.0;
 
 function EmojiSizeSlider({
   value, onChange, onRelease,
@@ -624,7 +624,7 @@ function EmojiSizeSlider({
         </View>
         <View style={[tbStyles.emojiThumb, { left: thumbX }]} />
       </View>
-      <Text style={{ fontSize: Math.round(13 + 22 * pct) }}>😊</Text>
+      <Text style={{ fontSize: Math.round(13 + 47 * pct) }}>😊</Text>
       <Text style={tbStyles.emojiScaleLabel}>{value.toFixed(1)}×</Text>
     </View>
   );
@@ -733,13 +733,13 @@ function FormattingToolbar({
           label="Tf"
           active={b.fontStyle === "serif"}
           onPress={() => onUpdateBlock({ fontStyle: "serif" })}
-          extraTextStyle={{ fontFamily: Platform.select({ ios: "Georgia", android: "serif", default: "Georgia, serif" }) ?? "serif" }}
+          extraTextStyle={{ fontFamily: "serif" }}
         />
         <Btn
           label="{}"
           active={b.fontStyle === "mono"}
           onPress={() => onUpdateBlock({ fontStyle: "mono" })}
-          extraTextStyle={{ fontFamily: Platform.select({ ios: "Courier New", android: "monospace", default: "Courier New, monospace" }) ?? "monospace" }}
+          extraTextStyle={{ fontFamily: "monospace" }}
         />
       </ScrollView>
 
@@ -779,7 +779,7 @@ const tbStyles = StyleSheet.create({
   emojiTrack: { height: 4, backgroundColor: "rgba(0,0,0,0.1)", borderRadius: 2 },
   emojiFill: { height: 4, backgroundColor: "#FF6B9D", borderRadius: 2 },
   emojiThumb: { position: "absolute", top: 2, width: 20, height: 20, borderRadius: 10, backgroundColor: "#FF6B9D", borderWidth: 2, borderColor: "#fff" },
-  emojiScaleLabel: { fontSize: 11, fontFamily: "Inter_600SemiBold", color: "#888", minWidth: 30 },
+  emojiScaleLabel: { fontSize: 11, fontFamily: "Inter_600SemiBold", color: "#888", minWidth: 40 },
 });
 
 // ─ Modal ─────────────────────────────────────────────────────────────────────
@@ -963,7 +963,7 @@ function EmojiText({ text, style, emojiScale, numberOfLines }: {
     <Text numberOfLines={numberOfLines} style={style}>
       {segments.map((s, i) =>
         s.isEmoji ? (
-          <Text key={i} style={{ fontSize: Math.min(baseFontSize * emojiScale, 72) }}>{s.t}</Text>
+          <Text key={i} style={{ fontSize: Math.round(baseFontSize * emojiScale) }}>{s.t}</Text>
         ) : (
           <Text key={i}>{s.t}</Text>
         )
