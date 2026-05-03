@@ -643,19 +643,22 @@ function RichBlockInput({
   inputRef: (r: TextInput | null) => void;
 }) {
   const sz = BLOCK_SIZES[block.type];
+  const scale = block.emojiScale ?? 1;
+  const effectiveFontSize = Math.round(sz.fontSize * scale);
+  const effectiveLineHeight = Math.round(sz.lineHeight * scale);
   return (
     <TextInput
       ref={inputRef}
       style={{
-        fontSize: sz.fontSize,
-        lineHeight: sz.lineHeight,
+        fontSize: effectiveFontSize,
+        lineHeight: effectiveLineHeight,
         fontFamily: blockFontFamily(block),
         fontStyle: block.italic ? "italic" : "normal",
         textDecorationLine: block.underline ? "underline" : "none",
         color: block.color,
         paddingHorizontal: 20,
         paddingVertical: 6,
-        minHeight: sz.lineHeight + 12,
+        minHeight: effectiveLineHeight + 12,
         opacity: isActive ? 1 : 0.8,
       }}
       value={block.text}
@@ -991,21 +994,20 @@ function NoteCard({
         <View style={{ paddingRight: 32 }}>
           {rich.slice(0, 5).map((block, i) => {
             const sz = BLOCK_SIZES[block.type];
-            const previewSize = Math.min(sz.fontSize, 17);
+            const scale = block.emojiScale ?? 1;
+            // Cap preview at 80px so card doesn't overflow
+            const previewSize = Math.min(sz.fontSize * scale, 80);
             const blockStyle = {
               fontSize: previewSize,
-              lineHeight: previewSize * 1.5,
+              lineHeight: previewSize * 1.3,
               fontFamily: blockFontFamily(block),
               fontStyle: block.italic ? "italic" : "normal" as const,
               textDecorationLine: block.underline ? "underline" : "none" as const,
               color: block.color,
               textAlign: isRTL ? "right" : "left" as const,
             };
-            const scale = block.emojiScale ?? 1;
-            const nLines = i === 0 && block.type !== "body" ? 1 : 2;
-            return scale > 1 && containsEmoji(block.text) ? (
-              <EmojiText key={block.id} text={block.text} style={blockStyle} emojiScale={scale} numberOfLines={nLines} />
-            ) : (
+            const nLines = scale > 3 ? 1 : (i === 0 && block.type !== "body" ? 1 : 2);
+            return (
               <Text key={block.id} numberOfLines={nLines} style={blockStyle}>{block.text}</Text>
             );
           })}
