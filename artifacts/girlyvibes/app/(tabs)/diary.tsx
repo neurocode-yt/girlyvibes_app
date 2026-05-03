@@ -1,5 +1,5 @@
 import { AppMaterialCommunityIcons as Icon } from "@/components/Icons";
-import { DiaryEntry, useApp } from "@/contexts/AppContext";
+import { DiaryEntry, DiaryNote, useApp } from "@/contexts/AppContext";
 import { useColors } from "@/hooks/useColors";
 import { useLanguage } from "@/contexts/LanguageContext";
 import * as Haptics from "expo-haptics";
@@ -532,6 +532,253 @@ const pastStyles = StyleSheet.create({
   note: { fontSize: 14, fontFamily: "Inter_400Regular", lineHeight: 21 },
 });
 
+// ─── Notes feature ────────────────────────────────────────────────────────────
+
+const NOTE_COLORS = [
+  "#FFE4E8", "#FFD6A5", "#FDFFB6", "#CAFFBF",
+  "#9BF6FF", "#A0C4FF", "#BDB2FF", "#FFC6FF",
+  "#FFB3BA", "#FFDAC1", "#E2F0CB", "#B5EAD7",
+];
+
+function AddNoteForm({
+  onSave,
+  onCancel,
+}: {
+  onSave: (text: string, color: string) => void;
+  onCancel: () => void;
+}) {
+  const colors = useColors();
+  const { t, isRTL } = useLanguage();
+  const [text, setText] = useState("");
+  const [noteColor, setNoteColor] = useState(NOTE_COLORS[0]);
+  const canSave = text.trim().length > 0;
+
+  return (
+    <View style={[addNoteStyles.wrapper, { backgroundColor: noteColor }]}>
+      <TextInput
+        style={[addNoteStyles.input, { color: "#333", textAlign: isRTL ? "right" : "left" }]}
+        placeholder={t.diary.noteHint}
+        placeholderTextColor="#aaa"
+        multiline
+        value={text}
+        onChangeText={setText}
+        autoFocus
+        textAlignVertical="top"
+      />
+      <View style={addNoteStyles.colorStrip}>
+        {NOTE_COLORS.map((c) => (
+          <Pressable
+            key={c}
+            style={[
+              addNoteStyles.swatch,
+              {
+                backgroundColor: c,
+                borderWidth: noteColor === c ? 3 : 1.5,
+                borderColor: noteColor === c ? "#333" : "#ddd",
+                transform: [{ scale: noteColor === c ? 1.15 : 1 }],
+              },
+            ]}
+            onPress={() => { Haptics.selectionAsync(); setNoteColor(c); }}
+          />
+        ))}
+      </View>
+      <View style={[addNoteStyles.btnRow, { flexDirection: isRTL ? "row-reverse" : "row" }]}>
+        <Pressable
+          style={[addNoteStyles.cancelBtn, { borderColor: "#ccc" }]}
+          onPress={onCancel}
+        >
+          <Text style={[addNoteStyles.cancelText, { color: "#888" }]}>{t.diary.cancel}</Text>
+        </Pressable>
+        <Pressable
+          style={[addNoteStyles.saveBtn, { backgroundColor: canSave ? "#333" : "#ccc", flex: 1 }]}
+          onPress={() => canSave && onSave(text.trim(), noteColor)}
+          disabled={!canSave}
+        >
+          <Icon name="check-circle-outline" size={16} color={canSave ? "#fff" : "#888"} />
+          <Text style={[addNoteStyles.saveText, { color: canSave ? "#fff" : "#888" }]}>
+            {t.diary.saveEntry}
+          </Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+const addNoteStyles = StyleSheet.create({
+  wrapper: { borderRadius: 18, padding: 16, marginBottom: 12 },
+  input: {
+    fontSize: 15,
+    fontFamily: "Inter_400Regular",
+    lineHeight: 22,
+    minHeight: 100,
+    marginBottom: 14,
+  },
+  colorStrip: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 14 },
+  swatch: { width: 28, height: 28, borderRadius: 14 },
+  btnRow: { gap: 10 },
+  cancelBtn: {
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cancelText: { fontSize: 14, fontFamily: "Inter_500Medium" },
+  saveBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  saveText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+});
+
+function NoteCard({ note, onDelete }: { note: DiaryNote; onDelete: () => void }) {
+  const { isRTL } = useLanguage();
+  return (
+    <View style={[noteCardStyles.card, { backgroundColor: note.color }]}>
+      <Pressable style={noteCardStyles.closeBtn} onPress={onDelete} hitSlop={8}>
+        <Icon name="close" size={14} color="#666" />
+      </Pressable>
+      <Text style={[noteCardStyles.text, { textAlign: isRTL ? "right" : "left" }]}>
+        {note.text}
+      </Text>
+    </View>
+  );
+}
+
+const noteCardStyles = StyleSheet.create({
+  card: { borderRadius: 16, padding: 16, marginBottom: 10, position: "relative" },
+  closeBtn: {
+    position: "absolute",
+    top: 10,
+    right: 10,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "rgba(0,0,0,0.08)",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 1,
+  },
+  text: { fontSize: 15, fontFamily: "Inter_400Regular", lineHeight: 22, paddingRight: 28 },
+});
+
+function NotesSection() {
+  const colors = useColors();
+  const { t, isRTL } = useLanguage();
+  const { data, saveNote, deleteNote } = useApp();
+  const [adding, setAdding] = useState(false);
+  const todayK = todayKey();
+
+  const allNotes = (data.diaryNotes ?? []).sort((a, b) => b.createdAt - a.createdAt);
+  const todayNotes = allNotes.filter((n) => n.date === todayK);
+  const pastNotes = allNotes.filter((n) => n.date !== todayK);
+
+  const handleSave = async (text: string, color: string) => {
+    const note: DiaryNote = {
+      id: `${todayK}-${Date.now()}`,
+      date: todayK,
+      text,
+      color,
+      createdAt: Date.now(),
+    };
+    await saveNote(note);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setAdding(false);
+  };
+
+  const handleDelete = (noteId: string) => {
+    if (Platform.OS === "web") { deleteNote(noteId); return; }
+    Alert.alert(t.diary.deleteConfirm, "", [
+      { text: t.diary.cancel, style: "cancel" },
+      { text: t.diary.deleteEntry, style: "destructive", onPress: () => deleteNote(noteId) },
+    ]);
+  };
+
+  return (
+    <View style={{ marginBottom: 24 }}>
+      <View style={[notesSectionStyles.header, { flexDirection: isRTL ? "row-reverse" : "row" }]}>
+        <Text style={[notesSectionStyles.title, { color: colors.foreground }]}>
+          {t.diary.notesTitle}
+        </Text>
+        {!adding && (
+          <Pressable
+            style={[notesSectionStyles.addBtn, { backgroundColor: colors.primary + "18" }]}
+            onPress={() => setAdding(true)}
+          >
+            <Icon name="plus" size={15} color={colors.primary} />
+            <Text style={[notesSectionStyles.addBtnText, { color: colors.primary }]}>
+              {t.diary.addNote}
+            </Text>
+          </Pressable>
+        )}
+      </View>
+
+      <View style={{ marginHorizontal: 16 }}>
+        {adding && (
+          <AddNoteForm onSave={handleSave} onCancel={() => setAdding(false)} />
+        )}
+
+        {todayNotes.map((note) => (
+          <NoteCard key={note.id} note={note} onDelete={() => handleDelete(note.id)} />
+        ))}
+
+        {pastNotes.length > 0 && (
+          <View>
+            {pastNotes.map((note) => (
+              <View key={note.id}>
+                <Text
+                  style={[
+                    notesSectionStyles.pastDateLabel,
+                    { color: colors.mutedForeground, textAlign: isRTL ? "right" : "left" },
+                  ]}
+                >
+                  {formatDisplayDate(note.date, isRTL)}
+                </Text>
+                <NoteCard note={note} onDelete={() => handleDelete(note.id)} />
+              </View>
+            ))}
+          </View>
+        )}
+
+        {!adding && todayNotes.length === 0 && pastNotes.length === 0 && (
+          <View style={notesSectionStyles.emptyRow}>
+            <Text style={[notesSectionStyles.emptyText, { color: colors.mutedForeground }]}>
+              {t.diary.noNotes}
+            </Text>
+          </View>
+        )}
+      </View>
+    </View>
+  );
+}
+
+const notesSectionStyles = StyleSheet.create({
+  header: {
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginHorizontal: 16,
+    marginBottom: 14,
+  },
+  title: { fontSize: 17, fontFamily: "Inter_600SemiBold" },
+  addBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
+  },
+  addBtnText: { fontSize: 13, fontFamily: "Inter_500Medium" },
+  pastDateLabel: { fontSize: 11, fontFamily: "Inter_400Regular", marginBottom: 5, marginTop: 10 },
+  emptyRow: { alignItems: "center", paddingVertical: 16 },
+  emptyText: { fontSize: 14, fontFamily: "Inter_400Regular" },
+});
+
 // ─── Main screen ─────────────────────────────────────────────────────────────
 
 export default function DiaryScreen() {
@@ -581,6 +828,8 @@ export default function DiaryScreen() {
       <SwipeableWeekStrip entries={entries} />
 
       <TodayCard />
+
+      <NotesSection />
 
       {pastEntries.length > 0 && (
         <View>

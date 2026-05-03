@@ -35,6 +35,14 @@ export interface DiaryEntry {
   cardColor: string; // hex
 }
 
+export interface DiaryNote {
+  id: string;        // `${date}-${timestamp}`
+  date: string;      // YYYY-MM-DD
+  text: string;
+  color: string;     // hex card color
+  createdAt: number; // ms timestamp
+}
+
 interface AppData {
   streak: number;
   lastStreakDate: string | null;
@@ -46,6 +54,7 @@ interface AppData {
   profileName: string;
   profilePhoto: string | null;
   diaryEntries: { [dateKey: string]: DiaryEntry };
+  diaryNotes: DiaryNote[];
 }
 
 interface AppContextType {
@@ -53,6 +62,8 @@ interface AppContextType {
   updateProfile: (name: string, photo: string | null) => Promise<void>;
   saveDiaryEntry: (entry: DiaryEntry) => Promise<void>;
   deleteDiaryEntry: (dateKey: string) => Promise<void>;
+  saveNote: (note: DiaryNote) => Promise<void>;
+  deleteNote: (noteId: string) => Promise<void>;
   toggleRoutineStep: (routineId: string, stepId: string) => Promise<void>;
   isStepCompleted: (routineId: string, stepId: string) => boolean;
   getRoutineCompletionPercent: (routineId: string, totalSteps: number) => number;
@@ -89,6 +100,7 @@ const DEFAULT_DATA: AppData = {
   profileName: "",
   profilePhoto: null,
   diaryEntries: {},
+  diaryNotes: [],
 };
 
 const AppContext = createContext<AppContextType | null>(null);
@@ -305,6 +317,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [data, save]
   );
 
+  const saveNote = useCallback(
+    async (note: DiaryNote) => {
+      const existing = data.diaryNotes ?? [];
+      await save({ ...data, diaryNotes: [...existing, note] });
+    },
+    [data, save]
+  );
+
+  const deleteNote = useCallback(
+    async (noteId: string) => {
+      const updated = (data.diaryNotes ?? []).filter((n) => n.id !== noteId);
+      await save({ ...data, diaryNotes: updated });
+    },
+    [data, save]
+  );
+
   return (
     <AppContext.Provider
       value={{
@@ -312,6 +340,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         updateProfile,
         saveDiaryEntry,
         deleteDiaryEntry,
+        saveNote,
+        deleteNote,
         toggleRoutineStep,
         isStepCompleted,
         getRoutineCompletionPercent,

@@ -112,6 +112,10 @@ export const AR = {
     weekDays: ["أح", "إث", "ثل", "أر", "خم", "جم", "سب"],
     deleteConfirm: "حذف هذه التسجيلة؟",
     cancel: "إلغاء",
+    notesTitle: "ملاحظاتي",
+    addNote: "أضيفي ملاحظة",
+    noteHint: "اكتبي ملاحظتك هنا...",
+    noNotes: "لا توجد ملاحظات بعد ✏️",
   },
   language: {
     switchTo: "English",
@@ -231,6 +235,10 @@ export const EN = {
     weekDays: ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"],
     deleteConfirm: "Delete this entry?",
     cancel: "Cancel",
+    notesTitle: "My Notes",
+    addNote: "Add a note",
+    noteHint: "Write your note here...",
+    noNotes: "No notes yet ✏️",
   },
   language: {
     switchTo: "العربية",
