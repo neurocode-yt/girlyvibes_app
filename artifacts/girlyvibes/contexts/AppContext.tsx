@@ -53,6 +53,7 @@ export interface DiaryNote {
   text: string;
   richContent?: RichBlock[];
   color: string;     // hex card color
+  title?: string;    // note title
   createdAt: number; // ms timestamp
 }
 

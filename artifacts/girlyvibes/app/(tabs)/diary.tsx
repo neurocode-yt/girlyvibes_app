@@ -567,10 +567,7 @@ function makeBlock(o?: Partial<RichBlock>): RichBlock {
 function blockFontFamily(block: RichBlock): string {
   if (block.fontStyle === "serif") return "serif";
   if (block.fontStyle === "mono")  return "monospace";
-  const heading = block.type === "h1" || block.type === "h2";
-  if (block.bold || heading) return "Inter_700Bold";
-  if (block.type === "h3") return "Inter_600SemiBold";
-  return "Inter_400Regular";
+  return "System";
 }
 
 // ─── Emoji helpers ─────────────────────────────────────────────────────────────
@@ -792,18 +789,21 @@ function NoteEditorModal({
 }: {
   visible: boolean;
   initialNote: DiaryNote | null;
-  onSave: (text: string, color: string, richContent: RichBlock[]) => void;
+  onSave: (text: string, color: string, richContent: RichBlock[], title?: string) => void;
   onClose: () => void;
 }) {
   const insets = useSafeAreaInsets();
   const { t, isRTL } = useLanguage();
+  const [title, setTitle] = useState("");
   const [blocks, setBlocks] = useState<RichBlock[]>(() => [makeBlock()]);
   const [activeId, setActiveId] = useState("");
   const [noteColor, setNoteColor] = useState(NOTE_COLORS[0]);
   const blockRefs = useRef<{ [id: string]: TextInput | null }>({});
+  const titleRef = useRef<TextInput | null>(null);
 
   useEffect(() => {
     if (!visible) return;
+    setTitle(initialNote?.title ?? "");
     setNoteColor(initialNote?.color ?? NOTE_COLORS[0]);
     if (initialNote?.richContent?.length) {
       setBlocks(initialNote.richContent);
@@ -867,7 +867,7 @@ function NoteEditorModal({
 
   const handleSave = () => {
     const text = blocks.map((b) => b.text).join("\n");
-    onSave(text, noteColor, blocks);
+    onSave(text, noteColor, blocks, title);
   };
 
   return (
@@ -900,6 +900,25 @@ function NoteEditorModal({
             keyboardShouldPersistTaps="always"
             contentContainerStyle={{ paddingTop: 8, paddingBottom: 60 }}
           >
+            {/* Title input */}
+            <TextInput
+              ref={titleRef}
+              style={{
+                fontSize: 18,
+                fontFamily: "System",
+                fontWeight: "600",
+                color: "#333",
+                paddingHorizontal: 20,
+                paddingVertical: 12,
+                minHeight: 44,
+              }}
+              placeholder="Note title..."
+              placeholderTextColor="#aaa"
+              value={title}
+              onChangeText={setTitle}
+              multiline={false}
+            />
+
             {blocks.map((block) => (
               <RichBlockInput
                 key={block.id}
@@ -990,6 +1009,12 @@ function NoteCard({
         <Icon name="close" size={14} color="#555" />
       </Pressable>
 
+      {note.title && (
+        <Text style={[noteCardStyles.title, { textAlign: isRTL ? "right" : "left" }]} numberOfLines={1}>
+          {note.title}
+        </Text>
+      )}
+
       {rich && rich.length > 0 ? (
         <View style={{ paddingRight: 32 }}>
           {rich.slice(0, 5).map((block, i) => {
@@ -1027,6 +1052,7 @@ function NoteCard({
 
 const noteCardStyles = StyleSheet.create({
   card: { borderRadius: 18, padding: 16, marginBottom: 10, position: "relative" },
+  title: { fontSize: 16, fontFamily: "System", fontWeight: "600", color: "#333", marginBottom: 8 },
   closeBtn: {
     position: "absolute",
     top: 10,
@@ -1067,9 +1093,14 @@ function NotesSection() {
     setModalVisible(true);
   };
 
-  const handleSave = async (text: string, color: string, richContent: RichBlock[]) => {
+  const handleSave = async (text: string, color: string, richContent: RichBlock[], title?: string) => {
     if (editingNote) {
       await updateNote(editingNote.id, text, color, richContent);
+      // Update title separately if needed
+      if (title !== undefined) {
+        const updatedNote = { ...editingNote, title };
+        await saveNote(updatedNote);
+      }
     } else {
       await saveNote({
         id: `${todayK}-${Date.now()}`,
@@ -1077,6 +1108,7 @@ function NotesSection() {
         text,
         richContent,
         color,
+        title,
         createdAt: Date.now(),
       });
     }
