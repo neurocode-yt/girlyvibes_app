@@ -16,7 +16,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, {
   cancelAnimation,
   FadeInDown,
-  SharedValue,
   useAnimatedStyle,
   useSharedValue,
   withDelay,
@@ -26,20 +25,20 @@ import Animated, {
   withTiming,
   runOnJS,
 } from "react-native-reanimated";
+import type { SharedValue } from "react-native-reanimated";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 
 import { useApp } from "@/contexts/AppContext";
-import { DETOX_CHALLENGES, type Activity } from "@/data/boredom";
+import { DETOX_CHALLENGES } from "@/data/boredom";
+import type { Activity } from "@/data/boredom";
 import { useColors } from "@/hooks/useColors";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useActivities } from "@/hooks/useActivities";
 import { getActivityImage } from "@/lib/activityImages";
 
-const CARD_SLOT = 248;
+// ─── Types ─────────────────────────────────────────────────────────────────────
 
-// ─── Floating Heart ────────────────────────────────────────────────────────────
-
-interface HeartConfig {
+type HeartConfig = {
   top?: number;
   bottom?: number;
   left?: number;
@@ -48,7 +47,33 @@ interface HeartConfig {
   delay: number;
   ampX: number;
   ampY: number;
-}
+};
+
+type DragSharedValues = {
+  dragY: SharedValue<number>;
+  draggingIndex: SharedValue<number>;
+  orderedIds: SharedValue<string[]>;
+  allShifts: SharedValue<{ [key: string]: number }>;
+};
+
+type DraggableCardProps = {
+  activity: Activity;
+  index: number;
+  highlighted: boolean;
+  drag: DragSharedValues;
+  totalCount: number;
+  onDragStart: (index: number) => void;
+  commitOrder: (from: number, to: number) => void;
+};
+
+type SortableListProps = {
+  highlighted: string | null;
+  onScrollToggle: (enabled: boolean) => void;
+};
+
+// ─── Constants ─────────────────────────────────────────────────────────────────
+
+const CARD_SLOT = 248;
 
 const HEART_CONFIGS: HeartConfig[] = [
   { top: -6,  left: 2,   size: 18, delay: 0,   ampX: 3,  ampY: 6 },
@@ -64,6 +89,8 @@ const HEART_CONFIGS: HeartConfig[] = [
   { bottom: 14,  right: 20, size: 13, delay: 450, ampX: -4, ampY: -5 },
   { bottom: 2,   right: 36, size: 11, delay: 80,  ampX: -5, ampY: -7 },
 ];
+
+// ─── Floating Heart ────────────────────────────────────────────────────────────
 
 function FloatingHeart({ cfg, isVisible }: { cfg: HeartConfig; isVisible: boolean }) {
   const wobbleX = useSharedValue(0);
@@ -112,7 +139,7 @@ function FloatingHeart({ cfg, isVisible }: { cfg: HeartConfig; isVisible: boolea
     ],
   }));
 
-  const pos: Record<string, number> = {};
+  const pos: { top?: number; bottom?: number; left?: number; right?: number } = {};
   if (cfg.top    !== undefined) pos.top    = cfg.top;
   if (cfg.bottom !== undefined) pos.bottom = cfg.bottom;
   if (cfg.left   !== undefined) pos.left   = cfg.left;
@@ -137,28 +164,12 @@ function FloatingHeartsOverlay({ visible }: { visible: boolean }) {
 
 // ─── Draggable Card ────────────────────────────────────────────────────────────
 
-interface DragSharedValues {
-  dragY: SharedValue<number>;
-  draggingIndex: SharedValue<number>;
-  orderedIds: SharedValue<string[]>;
-  allShifts: SharedValue<Record<string, number>>;
-  totalCount: number;
-}
-
-interface DraggableCardProps {
-  activity: Activity;
-  index: number;
-  highlighted: boolean;
-  drag: DragSharedValues;
-  onDragStart: (index: number) => void;
-  commitOrder: (from: number, to: number) => void;
-}
-
 function DraggableCard({
   activity,
   index,
   highlighted,
   drag,
+  totalCount,
   onDragStart,
   commitOrder,
 }: DraggableCardProps) {
@@ -167,7 +178,7 @@ function DraggableCard({
   const image = getActivityImage(activity.imageKey);
   const [isActive, setIsActive] = useState(false);
 
-  const { dragY, draggingIndex, orderedIds, allShifts, totalCount } = drag;
+  const { dragY, draggingIndex, orderedIds, allShifts } = drag;
 
   const gesture = Gesture.Pan()
     .activateAfterLongPress(420)
@@ -181,19 +192,24 @@ function DraggableCard({
       const di = draggingIndex.value;
       const ids = orderedIds.value;
       const count = ids.length;
-      const ti = Math.max(0, Math.min(count - 1, di + Math.round(e.translationY / CARD_SLOT)));
-      const shifts: Record<string, number> = {};
+      const raw = di + Math.round(e.translationY / CARD_SLOT);
+      const ti = raw < 0 ? 0 : raw >= count ? count - 1 : raw;
+      const shifts = {};
       for (let j = 0; j < count; j++) {
         if (j === di) continue;
-        if (di < ti && j > di && j <= ti) shifts[ids[j]] = -CARD_SLOT;
-        else if (di > ti && j < di && j >= ti) shifts[ids[j]] = CARD_SLOT;
+        if (di < ti && j > di && j <= ti) {
+          shifts[ids[j]] = -CARD_SLOT;
+        } else if (di > ti && j < di && j >= ti) {
+          shifts[ids[j]] = CARD_SLOT;
+        }
       }
       allShifts.value = shifts;
     })
     .onEnd(() => {
       const di = draggingIndex.value;
       const count = orderedIds.value.length;
-      const ti = Math.max(0, Math.min(count - 1, di + Math.round(dragY.value / CARD_SLOT)));
+      const raw = di + Math.round(dragY.value / CARD_SLOT);
+      const ti = raw < 0 ? 0 : raw >= count ? count - 1 : raw;
       runOnJS(commitOrder)(di, ti);
       dragY.value = withSpring(0, { damping: 14 });
       draggingIndex.value = -1;
@@ -218,74 +234,65 @@ function DraggableCard({
         { scale: isDragging ? 1.03 : 1 },
       ],
       zIndex: isDragging ? 200 : 1,
-      shadowOpacity: isDragging ? 0.35 : 0,
-      shadowRadius: isDragging ? 18 : 0,
-      shadowOffset: { width: 0, height: isDragging ? 8 : 0 },
-      shadowColor: "#000",
       elevation: isDragging ? 12 : 0,
     };
   });
 
   return (
-    <Animated.View entering={FadeInDown.delay(index * 55).duration(480).springify()}>
-    <GestureDetector gesture={gesture}>
-      <Animated.View style={[styles.cardOuter, animStyle]}>
-        <FloatingHeartsOverlay visible={isActive} />
+    <Animated.View entering={FadeInDown.delay(index * 55).duration(480)}>
+      <GestureDetector gesture={gesture}>
+        <Animated.View style={[styles.cardOuter, animStyle]}>
+          <FloatingHeartsOverlay visible={isActive} />
 
-        <View
-          style={[
-            styles.card,
-            {
-              borderColor: highlighted ? colors.primary : colors.border,
-              borderWidth: highlighted ? 2 : 1,
-            },
-          ]}
-        >
-          <View style={styles.cardImageWrapper}>
-            <Image source={image} style={styles.cardImage} contentFit="cover" />
-            {highlighted && (
-              <View style={[styles.cardHighlightBadge, { backgroundColor: colors.primary }]}>
-                <MaterialCommunityIcons name="star-four-points" size={12} color="#fff" />
-                <Text style={styles.cardHighlightBadgeText}>{l("مقترحة", "Pick this!")}</Text>
+          <View
+            style={[
+              styles.card,
+              {
+                borderColor: highlighted ? colors.primary : colors.border,
+                borderWidth: highlighted ? 2 : 1,
+              },
+            ]}
+          >
+            <View style={styles.cardImageWrapper}>
+              <Image source={image} style={styles.cardImage} contentFit="cover" />
+              {highlighted && (
+                <View style={[styles.cardHighlightBadge, { backgroundColor: colors.primary }]}>
+                  <MaterialCommunityIcons name="star-four-points" size={12} color="#fff" />
+                  <Text style={styles.cardHighlightBadgeText}>{l("مقترحة", "Pick this!")}</Text>
+                </View>
+              )}
+              <LinearGradient
+                colors={["transparent", "rgba(0,0,0,0.55)"]}
+                style={StyleSheet.absoluteFill}
+              />
+              <View style={styles.cardDurationBadge}>
+                <Text style={styles.cardDurationText}>
+                  {l(activity.duration, activity.durationEn)}
+                </Text>
               </View>
-            )}
-            <LinearGradient
-              colors={["transparent", "rgba(0,0,0,0.55)"]}
-              style={StyleSheet.absoluteFill}
-            />
-            <View style={styles.cardDurationBadge}>
-              <Text style={styles.cardDurationText}>
-                {l(activity.duration, activity.durationEn)}
+              {isActive && (
+                <View style={[styles.dragHint, { backgroundColor: "rgba(0,0,0,0.45)" }]}>
+                  <MaterialCommunityIcons name="drag-vertical" size={20} color="#fff" />
+                </View>
+              )}
+            </View>
+
+            <View style={[styles.cardBody, { backgroundColor: highlighted ? colors.highlight : colors.card }]}>
+              <Text
+                style={[styles.cardTitle, { color: highlighted ? colors.primary : colors.foreground }]}
+                numberOfLines={2}
+              >
+                {l(activity.title, activity.titleEn)}
               </Text>
             </View>
-            {isActive && (
-              <View style={[styles.dragHint, { backgroundColor: "rgba(0,0,0,0.45)" }]}>
-                <MaterialCommunityIcons name="drag-vertical" size={20} color="#fff" />
-              </View>
-            )}
           </View>
-
-          <View style={[styles.cardBody, { backgroundColor: highlighted ? colors.highlight : colors.card }]}>
-            <Text
-              style={[styles.cardTitle, { color: highlighted ? colors.primary : colors.foreground }]}
-              numberOfLines={2}
-            >
-              {l(activity.title, activity.titleEn)}
-            </Text>
-          </View>
-        </View>
-      </Animated.View>
-    </GestureDetector>
+        </Animated.View>
+      </GestureDetector>
     </Animated.View>
   );
 }
 
 // ─── Sortable Activity List ────────────────────────────────────────────────────
-
-interface SortableListProps {
-  highlighted: string | null;
-  onScrollToggle: (enabled: boolean) => void;
-}
 
 function SortableActivityList({ highlighted, onScrollToggle }: SortableListProps) {
   const { activities } = useActivities();
@@ -298,7 +305,7 @@ function SortableActivityList({ highlighted, onScrollToggle }: SortableListProps
   const dragY = useSharedValue(0);
   const draggingIndex = useSharedValue(-1);
   const orderedIds = useSharedValue<string[]>(orderedItems.map((i) => i.id));
-  const allShifts = useSharedValue<Record<string, number>>({});
+  const allShifts = useSharedValue<{ [key: string]: number }>({});
 
   useEffect(() => {
     orderedIds.value = orderedItems.map((i) => i.id);
@@ -309,7 +316,6 @@ function SortableActivityList({ highlighted, onScrollToggle }: SortableListProps
     draggingIndex,
     orderedIds,
     allShifts,
-    totalCount: orderedItems.length,
   };
 
   const onDragStart = (index: number) => {
@@ -337,6 +343,7 @@ function SortableActivityList({ highlighted, onScrollToggle }: SortableListProps
           key={activity.id}
           activity={activity}
           index={index}
+          totalCount={orderedItems.length}
           highlighted={highlighted === activity.id}
           drag={drag}
           onDragStart={onDragStart}
@@ -528,7 +535,7 @@ export default function BoredomScreen() {
 
         {highlighted && (
           <Animated.View
-            entering={FadeInDown.duration(300).springify()}
+            entering={FadeInDown.duration(300)}
             style={[
               styles.highlightBanner,
               { backgroundColor: colors.highlight, borderColor: colors.primary },
