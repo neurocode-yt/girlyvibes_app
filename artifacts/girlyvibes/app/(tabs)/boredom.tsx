@@ -5,7 +5,6 @@ import { LinearGradient } from "expo-linear-gradient";
 import React, { useEffect, useRef, useState } from "react";
 import {
   Animated,
-  LayoutAnimation,
   Platform,
   PanResponder,
   Pressable,
@@ -26,7 +25,7 @@ import { getActivityImage } from "@/lib/activityImages";
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
-const CARD_SLOT = 248;
+const CARD_SLOT = 244; // image 180 + body ~50 + gap 14
 
 // ─── Draggable Card ────────────────────────────────────────────────────────────
 
@@ -35,8 +34,10 @@ type DraggableCardProps = {
   index: number;
   totalCount: number;
   highlighted: boolean;
-  onDragStart: () => void;
-  commitOrder: (from: number, to: number) => void;
+  onRegisterSlotOffset: (id: string, offset: Animated.Value) => void;
+  onDragStart: (index: number) => void;
+  onDragMove: (index: number, dy: number) => void;
+  onDragEnd: (index: number, dy: number) => void;
 };
 
 function DraggableCard({
@@ -44,20 +45,49 @@ function DraggableCard({
   index,
   totalCount,
   highlighted,
+  onRegisterSlotOffset,
   onDragStart,
-  commitOrder,
+  onDragMove,
+  onDragEnd,
 }: DraggableCardProps) {
   const colors = useColors();
   const { l } = useLanguage();
   const image = getActivityImage(activity.imageKey);
   const [isActive, setIsActive] = useState(false);
 
-  const translateY = useRef(new Animated.Value(0)).current;
+  // Own gesture translation (goes up/down with finger)
+  const ownDragY = useRef(new Animated.Value(0)).current;
+  // Parent-controlled shift (neighbors slide out of the way)
+  const slotOffset = useRef(new Animated.Value(0)).current;
+  // Combined Y = own drag + neighbor shift — stable ref
+  const combinedY = useRef(Animated.add(ownDragY, slotOffset)).current;
+
   const scale = useRef(new Animated.Value(1)).current;
   const entryOpacity = useRef(new Animated.Value(0)).current;
   const entryTranslate = useRef(new Animated.Value(24)).current;
 
+  // Refs so PanResponder closures always have current values
+  const indexRef = useRef(index);
+  indexRef.current = index;
+  const totalCountRef = useRef(totalCount);
+  totalCountRef.current = totalCount;
+  const onDragStartRef = useRef(onDragStart);
+  onDragStartRef.current = onDragStart;
+  const onDragMoveRef = useRef(onDragMove);
+  onDragMoveRef.current = onDragMove;
+  const onDragEndRef = useRef(onDragEnd);
+  onDragEndRef.current = onDragEnd;
+
+  // Register this card's slotOffset with the parent
   useEffect(() => {
+    onRegisterSlotOffset(activity.id, slotOffset);
+  }, [activity.id]);
+
+  // Entry animation (only on first mount)
+  const entryDone = useRef(false);
+  useEffect(() => {
+    if (entryDone.current) return;
+    entryDone.current = true;
     Animated.parallel([
       Animated.timing(entryOpacity, {
         toValue: 1,
@@ -87,17 +117,19 @@ function DraggableCard({
           isLongPressed.current = true;
           setIsActive(true);
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-          onDragStart();
+          onDragStartRef.current(indexRef.current);
           Animated.spring(scale, {
-            toValue: 1.04,
+            toValue: 1.06,
             useNativeDriver: true,
-            speed: 20,
+            speed: 22,
+            bounciness: 4,
           }).start();
-        }, 420);
+        }, 380);
       },
       onPanResponderMove: (_, g) => {
         if (!isLongPressed.current) return;
-        translateY.setValue(g.dy);
+        ownDragY.setValue(g.dy);
+        onDragMoveRef.current(indexRef.current, g.dy);
       },
       onPanResponderRelease: (_, g) => {
         if (longPressTimer.current) {
@@ -105,16 +137,10 @@ function DraggableCard({
           longPressTimer.current = null;
         }
         if (isLongPressed.current) {
-          const raw = index + Math.round(g.dy / CARD_SLOT);
-          const to = raw < 0 ? 0 : raw >= totalCount ? totalCount - 1 : raw;
-          commitOrder(index, to);
+          onDragEndRef.current(indexRef.current, g.dy);
           Animated.parallel([
-            Animated.spring(translateY, { toValue: 0, useNativeDriver: true }),
-            Animated.spring(scale, {
-              toValue: 1,
-              useNativeDriver: true,
-              speed: 18,
-            }),
+            Animated.spring(ownDragY, { toValue: 0, useNativeDriver: true, speed: 20, bounciness: 0 }),
+            Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 20, bounciness: 0 }),
           ]).start();
           setIsActive(false);
         }
@@ -128,9 +154,10 @@ function DraggableCard({
         isLongPressed.current = false;
         setIsActive(false);
         Animated.parallel([
-          Animated.spring(translateY, { toValue: 0, useNativeDriver: true }),
-          Animated.spring(scale, { toValue: 1, useNativeDriver: true }),
+          Animated.spring(ownDragY, { toValue: 0, useNativeDriver: true, speed: 20, bounciness: 0 }),
+          Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 20, bounciness: 0 }),
         ]).start();
+        onDragEndRef.current(indexRef.current, 0);
       },
     })
   ).current;
@@ -140,13 +167,15 @@ function DraggableCard({
       style={{
         opacity: entryOpacity,
         transform: [{ translateY: entryTranslate }],
+        zIndex: isActive ? 999 : 1,
+        elevation: isActive ? 16 : 1,
       }}
     >
       <Animated.View
         {...panResponder.panHandlers}
         style={[
           styles.cardOuter,
-          { transform: [{ translateY }, { scale }] },
+          { transform: [{ translateY: combinedY }, { scale }] },
           isActive && styles.cardActive,
         ]}
       >
@@ -244,25 +273,77 @@ function SortableActivityList({ highlighted, onScrollToggle }: SortableListProps
   const { activities } = useActivities();
   const [orderedItems, setOrderedItems] = useState<Activity[]>(activities);
 
+  const orderedItemsRef = useRef(orderedItems);
+  orderedItemsRef.current = orderedItems;
+
+  // Map of activityId → slotOffset Animated.Value (owned by each card)
+  const slotOffsetMap = useRef<Map<string, Animated.Value>>(new Map()).current;
+  const hoverIndexRef = useRef<number | null>(null);
+
   useEffect(() => {
     setOrderedItems(activities);
   }, [activities]);
 
-  const onDragStart = () => {
+  const registerSlotOffset = (id: string, offset: Animated.Value) => {
+    slotOffsetMap.set(id, offset);
+  };
+
+  const updateNeighborOffsets = (fromIndex: number, toIndex: number) => {
+    const items = orderedItemsRef.current;
+    items.forEach((item, i) => {
+      if (i === fromIndex) return;
+      let target = 0;
+      if (fromIndex < toIndex && i > fromIndex && i <= toIndex) {
+        target = -CARD_SLOT; // dragging DOWN → neighbors above the gap shift up
+      } else if (fromIndex > toIndex && i >= toIndex && i < fromIndex) {
+        target = CARD_SLOT;  // dragging UP → neighbors below the gap shift down
+      }
+      const offset = slotOffsetMap.get(item.id);
+      if (offset) {
+        Animated.spring(offset, {
+          toValue: target,
+          useNativeDriver: true,
+          speed: 35,
+          bounciness: 0,
+        }).start();
+      }
+    });
+  };
+
+  const resetNeighborOffsets = () => {
+    slotOffsetMap.forEach((offset) => {
+      offset.setValue(0);
+    });
+  };
+
+  const onDragStart = (fromIndex: number) => {
+    hoverIndexRef.current = fromIndex;
     onScrollToggle(false);
   };
 
-  const commitOrder = (from: number, to: number) => {
-    onScrollToggle(true);
-    if (from === to) return;
-    const newItems = [...orderedItems];
-    const [moved] = newItems.splice(from, 1);
-    newItems.splice(to, 0, moved);
-    if (Platform.OS !== "web") {
-      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+  const onDragMove = (fromIndex: number, dy: number) => {
+    const n = orderedItemsRef.current.length;
+    const newHover = Math.max(0, Math.min(n - 1, fromIndex + Math.round(dy / CARD_SLOT)));
+    if (newHover !== hoverIndexRef.current) {
+      hoverIndexRef.current = newHover;
+      updateNeighborOffsets(fromIndex, newHover);
+      Haptics.selectionAsync();
     }
-    setOrderedItems(newItems);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  };
+
+  const onDragEnd = (fromIndex: number, dy: number) => {
+    const n = orderedItemsRef.current.length;
+    const to = Math.max(0, Math.min(n - 1, fromIndex + Math.round(dy / CARD_SLOT)));
+    resetNeighborOffsets();
+    hoverIndexRef.current = null;
+    onScrollToggle(true);
+    if (fromIndex !== to) {
+      const newItems = [...orderedItemsRef.current];
+      const [moved] = newItems.splice(fromIndex, 1);
+      newItems.splice(to, 0, moved);
+      setOrderedItems(newItems);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
   };
 
   return (
@@ -274,8 +355,10 @@ function SortableActivityList({ highlighted, onScrollToggle }: SortableListProps
           index={index}
           totalCount={orderedItems.length}
           highlighted={highlighted === activity.id}
+          onRegisterSlotOffset={registerSlotOffset}
           onDragStart={onDragStart}
-          commitOrder={commitOrder}
+          onDragMove={onDragMove}
+          onDragEnd={onDragEnd}
         />
       ))}
     </View>
