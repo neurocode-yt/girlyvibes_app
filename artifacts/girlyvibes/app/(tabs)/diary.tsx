@@ -2,6 +2,7 @@ import { AppMaterialCommunityIcons as Icon } from "@/components/Icons";
 import { DiaryEntry, DiaryNote, RichBlock, useApp } from "@/contexts/AppContext";
 import { useColors } from "@/hooks/useColors";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { Audio } from "expo-av";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
@@ -18,6 +19,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  type TextStyle,
   View,
 } from "react-native";
 
@@ -551,6 +553,8 @@ const BLOCK_SIZES: Record<RichBlock["type"], { fontSize: number; lineHeight: num
   h3:    { fontSize: 18, lineHeight: 26 },
   body:  { fontSize: 16, lineHeight: 24 },
   small: { fontSize: 13, lineHeight: 20 },
+  bullet: { fontSize: 16, lineHeight: 24 },
+  audio: { fontSize: 14, lineHeight: 20 },
 };
 
 const RICH_TEXT_COLORS = [
@@ -559,15 +563,63 @@ const RICH_TEXT_COLORS = [
   "#00695C", "#546E7A",
 ];
 
+const BULLET_SYMBOLS = ["♡", "♥︎", "ꨄ︎", "𓆩❤︎𓆪", "ᯓ", "𖹭", "✈︎", "❥", "•͜•⃝", "🧚🏻‍♀️", "۶۟", "ৎ"];
+
 let _bc = 0;
 function makeBlock(o?: Partial<RichBlock>): RichBlock {
   return { id: `b${Date.now()}${++_bc}`, text: "", type: "body", bold: false, italic: false, underline: false, color: "#222222", fontStyle: "sans", ...o };
 }
 
+const NOTE_FONT_OPTIONS: Array<{
+  key: RichBlock["fontStyle"];
+  label: string;
+  preview: string;
+}> = [
+  { key: "sans", label: "Inter", preview: "Aa" },
+  { key: "soft", label: "Soft", preview: "Aa" },
+  { key: "serif", label: "Serif", preview: "Aa" },
+  { key: "mono", label: "Mono", preview: "{}" },
+  { key: "hand", label: "Hand", preview: "Hi" },
+  { key: "fancy", label: "Fancy", preview: "Aa" },
+];
+
 function blockFontFamily(block: RichBlock): string {
-  if (block.fontStyle === "serif") return "serif";
-  if (block.fontStyle === "mono")  return "monospace";
-  return "System";
+  if (block.fontStyle === "soft") {
+    return Platform.select({
+      ios: "Avenir Next",
+      android: "sans-serif-medium",
+      default: "Trebuchet MS",
+    })!;
+  }
+  if (block.fontStyle === "serif") {
+    return Platform.select({
+      ios: "Georgia",
+      android: "serif",
+      default: "Georgia",
+    })!;
+  }
+  if (block.fontStyle === "mono") {
+    return Platform.select({
+      ios: "Courier New",
+      android: "monospace",
+      default: "Courier New",
+    })!;
+  }
+  if (block.fontStyle === "hand") {
+    return Platform.select({
+      ios: "Noteworthy",
+      android: "casual",
+      default: "Comic Sans MS",
+    })!;
+  }
+  if (block.fontStyle === "fancy") {
+    return Platform.select({
+      ios: "Snell Roundhand",
+      android: "cursive",
+      default: "Brush Script MT",
+    })!;
+  }
+  return block.bold ? "Inter_700Bold" : "Inter_400Regular";
 }
 
 // ─── Emoji helpers ─────────────────────────────────────────────────────────────
@@ -580,9 +632,229 @@ function containsEmoji(text: string): boolean {
   }
 }
 
+function formatAudioDuration(ms?: number): string {
+  if (!ms) return "0:00";
+  const totalSeconds = Math.max(0, Math.round(ms / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
 const EMOJI_SLIDER_TRACK = 160;
 const EMOJI_SCALE_MIN = 1.0;
-const EMOJI_SCALE_MAX = 20.0;
+const EMOJI_SCALE_MAX = 8.0;
+
+function VoiceBlock({
+  block,
+  onUpdate,
+}: {
+  block: RichBlock;
+  onUpdate: (updates: Partial<RichBlock>) => void;
+}) {
+  const { l } = useLanguage();
+  const [recording, setRecording] = useState<Audio.Recording | null>(null);
+  const [sound, setSound] = useState<Audio.Sound | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  useEffect(() => {
+    return () => {
+      sound?.unloadAsync();
+      recording?.stopAndUnloadAsync().catch(() => {});
+    };
+  }, [recording, sound]);
+
+  const startRecording = async () => {
+    try {
+      const permission = await Audio.requestPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert(l("نحتاج إذن الميكروفون لتسجيل الملاحظة الصوتية.", "Microphone permission is needed to record a voice note."));
+        return;
+      }
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+      const nextRecording = new Audio.Recording();
+      await nextRecording.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+      await nextRecording.startAsync();
+      setRecording(nextRecording);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    } catch {
+      Alert.alert(l("تعذر بدء التسجيل.", "Could not start recording."));
+    }
+  };
+
+  const stopRecording = async () => {
+    if (!recording) return;
+    try {
+      await recording.stopAndUnloadAsync();
+      const uri = recording.getURI();
+      const status = await recording.getStatusAsync();
+      setRecording(null);
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+      if (uri) {
+        onUpdate({
+          audioUri: uri,
+          audioDurationMillis: status.durationMillis ?? 0,
+        });
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+    } catch {
+      setRecording(null);
+      Alert.alert(l("تعذر حفظ التسجيل.", "Could not save recording."));
+    }
+  };
+
+  const playAudio = async () => {
+    if (!block.audioUri) return;
+    try {
+      if (sound) {
+        await sound.replayAsync();
+        setIsPlaying(true);
+        return;
+      }
+      const created = await Audio.Sound.createAsync({ uri: block.audioUri });
+      setSound(created.sound);
+      created.sound.setOnPlaybackStatusUpdate((status) => {
+        if ("didJustFinish" in status && status.didJustFinish) {
+          setIsPlaying(false);
+        }
+      });
+      await created.sound.playAsync();
+      setIsPlaying(true);
+    } catch {
+      Alert.alert(l("تعذر تشغيل التسجيل.", "Could not play this recording."));
+    }
+  };
+
+  const pauseAudio = async () => {
+    if (!sound) return;
+    await sound.pauseAsync();
+    setIsPlaying(false);
+  };
+
+  const removeAudio = async () => {
+    await sound?.unloadAsync();
+    setSound(null);
+    setIsPlaying(false);
+    onUpdate({ audioUri: undefined, audioDurationMillis: undefined });
+  };
+
+  return (
+    <View style={voiceStyles.card}>
+      <LinearGradient
+        colors={["rgba(255,255,255,0.74)", "rgba(255,255,255,0.38)"]}
+        style={voiceStyles.glow}
+      />
+      <View style={voiceStyles.headerRow}>
+        <View style={voiceStyles.micBadge}>
+          <Icon name="chatbubble-ellipses-outline" size={17} color="#C2185B" />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={voiceStyles.title}>{l("ملاحظة صوتية", "Voice note")}</Text>
+          <Text style={voiceStyles.sub}>
+            {recording
+              ? l("يتم التسجيل الآن...", "Recording now...")
+              : block.audioUri
+              ? formatAudioDuration(block.audioDurationMillis)
+              : l("سجلي صوتك داخل هذه الملاحظة", "Record your voice inside this note")}
+          </Text>
+        </View>
+      </View>
+
+      <View style={voiceStyles.waveRow}>
+        {Array.from({ length: 22 }).map((_, i) => (
+          <View
+            key={i}
+            style={[
+              voiceStyles.wave,
+              {
+                height: 8 + ((i * 7) % 24),
+                opacity: recording || isPlaying ? 0.85 : 0.38,
+              },
+            ]}
+          />
+        ))}
+      </View>
+
+      <View style={voiceStyles.actions}>
+        {recording ? (
+          <Pressable style={[voiceStyles.voiceBtn, voiceStyles.stopBtn]} onPress={stopRecording}>
+            <Text style={voiceStyles.stopBtnText}>{l("إيقاف", "Stop")}</Text>
+          </Pressable>
+        ) : (
+          <Pressable style={voiceStyles.voiceBtn} onPress={startRecording}>
+            <Text style={voiceStyles.voiceBtnText}>
+              {block.audioUri ? l("إعادة التسجيل", "Re-record") : l("تسجيل", "Record")}
+            </Text>
+          </Pressable>
+        )}
+
+        {block.audioUri && !recording && (
+          <>
+            <Pressable style={voiceStyles.secondaryBtn} onPress={isPlaying ? pauseAudio : playAudio}>
+              <Text style={voiceStyles.secondaryBtnText}>{isPlaying ? l("إيقاف مؤقت", "Pause") : l("تشغيل", "Play")}</Text>
+            </Pressable>
+            <Pressable style={voiceStyles.deleteVoiceBtn} onPress={removeAudio}>
+              <Text style={voiceStyles.deleteVoiceText}>{l("حذف", "Remove")}</Text>
+            </Pressable>
+          </>
+        )}
+      </View>
+
+      <TextInput
+        style={voiceStyles.captionInput}
+        placeholder={l("تعليق قصير للصوت...", "Short caption for this audio...")}
+        placeholderTextColor="rgba(51,51,51,0.45)"
+        value={block.text}
+        onChangeText={(text) => onUpdate({ text })}
+      />
+    </View>
+  );
+}
+
+const voiceStyles = StyleSheet.create({
+  card: {
+    backgroundColor: "rgba(255,255,255,0.38)",
+    borderColor: "rgba(255,255,255,0.7)",
+    borderRadius: 20,
+    borderWidth: 1,
+    marginHorizontal: 14,
+    marginVertical: 8,
+    overflow: "hidden",
+    padding: 14,
+  },
+  glow: { ...StyleSheet.absoluteFillObject },
+  headerRow: { alignItems: "center", flexDirection: "row", gap: 10 },
+  micBadge: {
+    alignItems: "center",
+    backgroundColor: "rgba(255,107,157,0.18)",
+    borderRadius: 18,
+    height: 36,
+    justifyContent: "center",
+    width: 36,
+  },
+  title: { color: "#333", fontFamily: "Inter_700Bold", fontSize: 14 },
+  sub: { color: "rgba(51,51,51,0.62)", fontFamily: "Inter_500Medium", fontSize: 12, marginTop: 2 },
+  waveRow: { alignItems: "center", flexDirection: "row", gap: 4, height: 42, marginTop: 12 },
+  wave: { backgroundColor: "#C2185B", borderRadius: 999, width: 4 },
+  actions: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 },
+  voiceBtn: { backgroundColor: "#C2185B", borderRadius: 18, paddingHorizontal: 14, paddingVertical: 8 },
+  voiceBtnText: { color: "#fff", fontFamily: "Inter_700Bold", fontSize: 12 },
+  stopBtn: { backgroundColor: "#333" },
+  stopBtnText: { color: "#fff", fontFamily: "Inter_700Bold", fontSize: 12 },
+  secondaryBtn: { backgroundColor: "rgba(255,255,255,0.56)", borderRadius: 18, paddingHorizontal: 14, paddingVertical: 8 },
+  secondaryBtnText: { color: "#333", fontFamily: "Inter_700Bold", fontSize: 12 },
+  deleteVoiceBtn: { backgroundColor: "rgba(224,0,85,0.1)", borderRadius: 18, paddingHorizontal: 14, paddingVertical: 8 },
+  deleteVoiceText: { color: "#D20A55", fontFamily: "Inter_700Bold", fontSize: 12 },
+  captionInput: {
+    color: "#333",
+    fontFamily: "Inter_400Regular",
+    fontSize: 13,
+    marginTop: 10,
+    padding: 0,
+  },
+});
 
 function EmojiSizeSlider({
   value, onChange, onRelease,
@@ -630,59 +902,196 @@ function EmojiSizeSlider({
 // ─ Single block text input ────────────────────────────────────────────────────
 
 function RichBlockInput({
-  block, isActive, onChangeText, onFocus, onEnter, onBackspaceEmpty, inputRef,
+  block, isActive, onChangeText, onUpdateBlock, onFocus, onEnter, onBackspaceEmpty, inputRef,
 }: {
   block: RichBlock; isActive: boolean;
   onChangeText: (id: string, t: string) => void;
+  onUpdateBlock: (id: string, updates: Partial<RichBlock>) => void;
   onFocus: (id: string) => void;
   onEnter: (id: string, after: string) => void;
   onBackspaceEmpty: (id: string) => void;
   inputRef: (r: TextInput | null) => void;
 }) {
+  const [bulletPickerOpen, setBulletPickerOpen] = useState(false);
+
+  if (block.type === "audio") {
+    return (
+      <View style={[richBlockStyles.wrap, isActive && richBlockStyles.wrapActive]}>
+        {isActive && <View style={[richBlockStyles.rail, { backgroundColor: "#C2185B" }]} />}
+        <Pressable onPress={() => onFocus(block.id)}>
+          <VoiceBlock block={block} onUpdate={(updates) => onUpdateBlock(block.id, updates)} />
+        </Pressable>
+      </View>
+    );
+  }
+
   const sz = BLOCK_SIZES[block.type];
   const scale = block.emojiScale ?? 1;
   const effectiveFontSize = Math.round(sz.fontSize * scale);
   const effectiveLineHeight = Math.round(sz.lineHeight * scale);
+  const bulletSymbol = block.bulletSymbol ?? BULLET_SYMBOLS[0];
+  const cycleBullet = () => {
+    const index = BULLET_SYMBOLS.indexOf(bulletSymbol);
+    onUpdateBlock(block.id, {
+      bulletSymbol: BULLET_SYMBOLS[(index + 1) % BULLET_SYMBOLS.length],
+    });
+  };
+
   return (
-    <TextInput
-      ref={inputRef}
-      style={{
-        fontSize: effectiveFontSize,
-        lineHeight: effectiveLineHeight,
-        fontFamily: blockFontFamily(block),
-        fontStyle: block.italic ? "italic" : "normal",
-        textDecorationLine: block.underline ? "underline" : "none",
-        color: block.color,
-        paddingHorizontal: 20,
-        paddingVertical: 6,
-        minHeight: effectiveLineHeight + 12,
-        opacity: isActive ? 1 : 0.8,
-      }}
-      value={block.text}
-      multiline
-      blurOnSubmit={false}
-      onFocus={() => onFocus(block.id)}
-      onChangeText={(val) => {
-        if (val.includes("\n")) {
-          const [before, ...rest] = val.split("\n");
-          onChangeText(block.id, before);
-          onEnter(block.id, rest.join("\n"));
-        } else {
-          onChangeText(block.id, val);
-        }
-      }}
-      onKeyPress={({ nativeEvent }) => {
-        if (nativeEvent.key === "Backspace" && block.text === "") onBackspaceEmpty(block.id);
-      }}
-    />
+    <View style={[richBlockStyles.wrap, isActive && richBlockStyles.wrapActive]}>
+      {isActive && <View style={[richBlockStyles.rail, { backgroundColor: block.color }]} />}
+      {block.type === "bullet" && (
+        <>
+          <Pressable
+            style={richBlockStyles.bulletWrap}
+            onPress={cycleBullet}
+            onLongPress={() => setBulletPickerOpen(true)}
+            delayLongPress={260}
+            hitSlop={12}
+          >
+            <Text style={richBlockStyles.bulletSymbol}>{bulletSymbol}</Text>
+          </Pressable>
+          {bulletPickerOpen && (
+            <View style={richBlockStyles.bulletPicker}>
+              {BULLET_SYMBOLS.map((symbol) => (
+                <Pressable
+                  key={symbol}
+                  style={[
+                    richBlockStyles.bulletOption,
+                    bulletSymbol === symbol && richBlockStyles.bulletOptionActive,
+                  ]}
+                  onPress={() => {
+                    onUpdateBlock(block.id, { bulletSymbol: symbol });
+                    setBulletPickerOpen(false);
+                  }}
+                >
+                  <Text style={richBlockStyles.bulletOptionText}>{symbol}</Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
+        </>
+      )}
+      <TextInput
+        ref={inputRef}
+        style={{
+          fontSize: effectiveFontSize,
+          lineHeight: effectiveLineHeight,
+          fontFamily: blockFontFamily(block),
+          fontWeight: block.bold ? "700" : "400",
+          fontStyle: block.italic ? "italic" : "normal",
+          textDecorationLine: block.underline ? "underline" : "none",
+          color: block.color,
+          paddingLeft: block.type === "bullet" ? 62 : 20,
+          paddingRight: 20,
+          paddingVertical: 6,
+          minHeight: effectiveLineHeight + 12,
+          opacity: 1,
+        }}
+        value={block.text}
+        multiline
+        blurOnSubmit={false}
+        onFocus={() => onFocus(block.id)}
+        onChangeText={(val) => {
+          if (val.includes("\n")) {
+            const [before, ...rest] = val.split("\n");
+            onChangeText(block.id, before);
+            onEnter(block.id, rest.join("\n"));
+          } else {
+            onChangeText(block.id, val);
+          }
+        }}
+        onKeyPress={({ nativeEvent }) => {
+          if (nativeEvent.key === "Backspace" && block.text === "") onBackspaceEmpty(block.id);
+        }}
+      />
+    </View>
   );
 }
 
+const richBlockStyles = StyleSheet.create({
+  wrap: {
+    borderRadius: 14,
+    marginHorizontal: 10,
+    marginVertical: 1,
+    overflow: "hidden",
+    position: "relative",
+  },
+  wrapActive: {
+    backgroundColor: "rgba(255,255,255,0.34)",
+  },
+  rail: {
+    bottom: 8,
+    borderRadius: 4,
+    left: 4,
+    opacity: 0.65,
+    position: "absolute",
+    top: 8,
+    width: 4,
+  },
+  bulletWrap: {
+    alignItems: "center",
+    height: 38,
+    justifyContent: "center",
+    left: 8,
+    position: "absolute",
+    top: 6,
+    width: 52,
+    zIndex: 5,
+  },
+  bulletSymbol: {
+    color: "#C2185B",
+    fontSize: 21,
+    lineHeight: 30,
+    includeFontPadding: false,
+    minWidth: 46,
+    textAlign: "center",
+    textShadowColor: "rgba(194,24,91,0.18)",
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
+  },
+  bulletPicker: {
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.94)",
+    borderColor: "rgba(194,24,91,0.16)",
+    borderRadius: 18,
+    borderWidth: 1,
+    elevation: 8,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    left: 14,
+    maxWidth: 250,
+    padding: 6,
+    position: "absolute",
+    shadowColor: "#C2185B",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    top: 42,
+    zIndex: 20,
+  },
+  bulletOption: {
+    alignItems: "center",
+    borderRadius: 14,
+    height: 36,
+    justifyContent: "center",
+    minWidth: 36,
+    paddingHorizontal: 6,
+  },
+  bulletOptionActive: {
+    backgroundColor: "rgba(255,107,157,0.18)",
+  },
+  bulletOptionText: {
+    color: "#C2185B",
+    fontSize: 19,
+    lineHeight: 26,
+  },
+});
+
 // ─ Formatting toolbar ─────────────────────────────────────────────────────────
 
-function FormattingToolbar({
-  activeBlock, onUpdateBlock, noteColor, onNoteColorChange, onRefocus, hasEmoji, emojiScale, onEmojiScale,
-}: {
+type FormattingToolbarProps = {
   activeBlock: RichBlock | null;
   onUpdateBlock: (u: Partial<RichBlock>) => void;
   noteColor: string;
@@ -691,9 +1100,37 @@ function FormattingToolbar({
   hasEmoji: boolean;
   emojiScale: number;
   onEmojiScale: (s: number) => void;
-}) {
+  onAddBlock: () => void;
+  onDuplicateBlock: () => void;
+  onMoveBlock: (direction: -1 | 1) => void;
+  onDeleteBlock: () => void;
+  onBulletSymbolChange: (symbol: string) => void;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
+  canDelete: boolean;
+};
+
+function FormattingToolbar({
+  activeBlock,
+  onUpdateBlock,
+  noteColor,
+  onNoteColorChange,
+  onRefocus,
+  hasEmoji,
+  emojiScale,
+  onEmojiScale,
+  onAddBlock,
+  onDuplicateBlock,
+  onMoveBlock,
+  onDeleteBlock,
+  onBulletSymbolChange,
+  canMoveUp,
+  canMoveDown,
+  canDelete,
+}: FormattingToolbarProps) {
   const insets = useSafeAreaInsets();
   const b = activeBlock;
+  const [bulletPickerOpen, setBulletPickerOpen] = useState(false);
   if (!b) return null;
 
   const Btn = ({ label, active, onPress, extraTextStyle }: {
@@ -704,6 +1141,41 @@ function FormattingToolbar({
       onPress={() => { onPress(); onRefocus(); }}
     >
       <Text style={[tbStyles.btnTxt, active && tbStyles.btnTxtOn, extraTextStyle]}>{label}</Text>
+    </Pressable>
+  );
+
+  const ActionBtn = ({
+    label,
+    onPress,
+    disabled,
+    tone = "neutral",
+  }: {
+    label: string;
+    onPress: () => void;
+    disabled?: boolean;
+    tone?: "neutral" | "danger";
+  }) => (
+    <Pressable
+      style={[
+        tbStyles.actionBtn,
+        tone === "danger" && tbStyles.actionBtnDanger,
+        disabled && tbStyles.actionBtnDisabled,
+      ]}
+      disabled={disabled}
+      onPress={() => {
+        onPress();
+        onRefocus();
+      }}
+    >
+      <Text
+        style={[
+          tbStyles.actionBtnText,
+          tone === "danger" && tbStyles.actionBtnTextDanger,
+          disabled && tbStyles.actionBtnTextDisabled,
+        ]}
+      >
+        {label}
+      </Text>
     </Pressable>
   );
 
@@ -719,28 +1191,91 @@ function FormattingToolbar({
       )}
 
       {/* Row 1 — type + inline + font */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="always" contentContainerStyle={tbStyles.actionRow}>
+        <ActionBtn label="+ Block" onPress={onAddBlock} />
+        <ActionBtn label="+ Voice" onPress={() => onUpdateBlock({ type: "audio", text: "", audioUri: undefined, audioDurationMillis: undefined })} />
+        <ActionBtn label="Copy" onPress={onDuplicateBlock} />
+        <ActionBtn label="↑" onPress={() => onMoveBlock(-1)} disabled={!canMoveUp} />
+        <ActionBtn label="↓" onPress={() => onMoveBlock(1)} disabled={!canMoveDown} />
+        <ActionBtn label="Delete" onPress={onDeleteBlock} disabled={!canDelete} tone="danger" />
+      </ScrollView>
+
       <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="always" contentContainerStyle={tbStyles.row}>
         {(["h1","h2","h3","body","small"] as const).map(tp => (
           <Btn key={tp} label={tp === "body" ? "¶" : tp === "small" ? "sm" : tp.toUpperCase()} active={b.type === tp} onPress={() => onUpdateBlock({ type: tp })} />
         ))}
+        <View style={tbStyles.listControlWrap}>
+          <Pressable
+            style={[tbStyles.btn, b.type === "bullet" && tbStyles.btnOn]}
+            onPress={() => {
+              onUpdateBlock({
+                type: "bullet",
+                bulletSymbol: b.bulletSymbol ?? BULLET_SYMBOLS[0],
+              });
+              onRefocus();
+            }}
+            onLongPress={() => {
+              onUpdateBlock({
+                type: "bullet",
+                bulletSymbol: b.bulletSymbol ?? BULLET_SYMBOLS[0],
+              });
+              setBulletPickerOpen(true);
+            }}
+            delayLongPress={260}
+          >
+            <Text style={[tbStyles.btnTxt, b.type === "bullet" && tbStyles.btnTxtOn]}>
+              {(b.bulletSymbol ?? BULLET_SYMBOLS[0])} List
+            </Text>
+          </Pressable>
+          {bulletPickerOpen && (
+            <View style={tbStyles.toolbarBulletPicker}>
+              {BULLET_SYMBOLS.map((symbol) => (
+                <Pressable
+                  key={symbol}
+                  style={[
+                    tbStyles.toolbarBulletOption,
+                    (b.bulletSymbol ?? BULLET_SYMBOLS[0]) === symbol && tbStyles.toolbarBulletOptionActive,
+                  ]}
+                  onPress={() => {
+                    onBulletSymbolChange(symbol);
+                    setBulletPickerOpen(false);
+                    onRefocus();
+                  }}
+                >
+                  <Text style={tbStyles.toolbarBulletText}>{symbol}</Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
+        </View>
         <View style={tbStyles.sep} />
         <Btn label="B" active={b.bold}      onPress={() => onUpdateBlock({ bold: !b.bold })}           extraTextStyle={{ fontFamily: "Inter_700Bold" }} />
         <Btn label="I" active={b.italic}    onPress={() => onUpdateBlock({ italic: !b.italic })}       extraTextStyle={{ fontStyle: "italic" }} />
         <Btn label="U" active={b.underline} onPress={() => onUpdateBlock({ underline: !b.underline })} extraTextStyle={{ textDecorationLine: "underline" }} />
         <View style={tbStyles.sep} />
-        <Btn label="Aa" active={b.fontStyle === "sans"} onPress={() => onUpdateBlock({ fontStyle: "sans" })} />
-        <Btn
-          label="Tf"
-          active={b.fontStyle === "serif"}
-          onPress={() => onUpdateBlock({ fontStyle: "serif" })}
-          extraTextStyle={{ fontFamily: "serif" }}
-        />
-        <Btn
-          label="{}"
-          active={b.fontStyle === "mono"}
-          onPress={() => onUpdateBlock({ fontStyle: "mono" })}
-          extraTextStyle={{ fontFamily: "monospace" }}
-        />
+        {NOTE_FONT_OPTIONS.map((font) => (
+          <Pressable
+            key={font.key}
+            style={[tbStyles.fontBtn, b.fontStyle === font.key && tbStyles.btnOn]}
+            onPress={() => {
+              onUpdateBlock({ fontStyle: font.key });
+              onRefocus();
+            }}
+          >
+            <Text
+              style={[
+                tbStyles.fontPreview,
+                b.fontStyle === font.key && tbStyles.btnTxtOn,
+                { fontFamily: blockFontFamily({ ...b, fontStyle: font.key }) },
+              ]}
+            >
+              {font.preview}
+            </Text>
+            <Text style={[tbStyles.fontLabel, b.fontStyle === font.key && tbStyles.btnTxtOn]}>
+              {font.label}
+            </Text>
+          </Pressable>
+        ))}
       </ScrollView>
 
       {/* Row 2 — text colors + card bg colors */}
@@ -762,13 +1297,62 @@ function FormattingToolbar({
 }
 
 const tbStyles = StyleSheet.create({
-  container: { backgroundColor: "rgba(255,255,255,0.92)", borderTopWidth: 1, borderTopColor: "rgba(0,0,0,0.06)" },
-  row: { flexDirection: "row", alignItems: "center", paddingHorizontal: 10, height: 46, gap: 2 },
+  container: { backgroundColor: "rgba(255,255,255,0.94)", borderTopWidth: 1, borderTopColor: "rgba(0,0,0,0.06)", shadowColor: "#000", shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 10 },
+  actionRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 10, height: 44, gap: 8 },
+  row: { flexDirection: "row", alignItems: "center", paddingHorizontal: 10, height: 46, gap: 4 },
   colorRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 10, height: 44, gap: 8 },
+  actionBtn: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16, backgroundColor: "rgba(0,0,0,0.07)" },
+  actionBtnDanger: { backgroundColor: "rgba(224,0,85,0.1)" },
+  actionBtnDisabled: { opacity: 0.36 },
+  actionBtnText: { fontSize: 12, fontFamily: "Inter_600SemiBold", color: "#333" },
+  actionBtnTextDanger: { color: "#D20A55" },
+  actionBtnTextDisabled: { color: "#999" },
   btn: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, minWidth: 34, alignItems: "center", justifyContent: "center" },
   btnOn: { backgroundColor: "rgba(0,0,0,0.12)" },
   btnTxt: { fontSize: 14, fontFamily: "Inter_400Regular", color: "#666" },
   btnTxtOn: { color: "#111" },
+  listControlWrap: { position: "relative" },
+  toolbarBulletPicker: {
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.98)",
+    borderColor: "rgba(194,24,91,0.16)",
+    borderRadius: 18,
+    borderWidth: 1,
+    bottom: 42,
+    elevation: 10,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    left: -4,
+    maxWidth: 260,
+    padding: 7,
+    position: "absolute",
+    shadowColor: "#C2185B",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.14,
+    shadowRadius: 12,
+    zIndex: 50,
+  },
+  toolbarBulletOption: {
+    alignItems: "center",
+    borderRadius: 14,
+    height: 36,
+    justifyContent: "center",
+    minWidth: 38,
+    paddingHorizontal: 6,
+  },
+  toolbarBulletOptionActive: { backgroundColor: "rgba(255,107,157,0.18)" },
+  toolbarBulletText: { color: "#C2185B", fontSize: 19, lineHeight: 26 },
+  fontBtn: {
+    alignItems: "center",
+    borderRadius: 10,
+    justifyContent: "center",
+    minWidth: 58,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  fontPreview: { color: "#444", fontSize: 15, lineHeight: 18 },
+  fontLabel: { color: "#666", fontFamily: "Inter_500Medium", fontSize: 10, lineHeight: 12, marginTop: 1 },
   sep: { width: 1, height: 24, backgroundColor: "rgba(0,0,0,0.12)", marginHorizontal: 4 },
   colorLabel: { fontSize: 11, fontFamily: "Inter_700Bold", color: "#999", width: 14, textAlign: "center" },
   dot: { width: 24, height: 24, borderRadius: 12 },
@@ -793,7 +1377,7 @@ function NoteEditorModal({
   onClose: () => void;
 }) {
   const insets = useSafeAreaInsets();
-  const { t, isRTL } = useLanguage();
+  const { t, isRTL, l } = useLanguage();
   const [title, setTitle] = useState("");
   const [blocks, setBlocks] = useState<RichBlock[]>(() => [makeBlock()]);
   const [activeId, setActiveId] = useState("");
@@ -828,7 +1412,8 @@ function NoteEditorModal({
   }, []);
 
   const activeBlock = blocks.find((b) => b.id === activeId) ?? null;
-  const hasContent = blocks.some((b) => b.text.trim());
+  const activeIndex = blocks.findIndex((b) => b.id === activeId);
+  const hasContent = !!title.trim() || blocks.some((b) => b.text.trim() || b.audioUri);
   const hasEmojiInBlock = containsEmoji(activeBlock?.text ?? "");
   const emojiScale = activeBlock?.emojiScale ?? 1.0;
 
@@ -840,7 +1425,7 @@ function NoteEditorModal({
   const handleEnter = (id: string, after: string) => {
     const src = blocks.find((b) => b.id === id);
     const nb = makeBlock({
-      type: src?.type === "h1" || src?.type === "h2" ? "body" : src?.type,
+      type: src?.type === "h1" || src?.type === "h2" || src?.type === "audio" ? "body" : src?.type,
       color: src?.color,
       fontStyle: src?.fontStyle,
       text: after,
@@ -855,6 +1440,57 @@ function NoteEditorModal({
     setTimeout(() => blockRefs.current[nb.id]?.focus(), 30);
   };
 
+  const handleAddBlock = () => {
+    const base = activeBlock ?? blocks[blocks.length - 1];
+    const nb = makeBlock({
+      color: base?.color,
+      fontStyle: base?.fontStyle,
+      type: "body",
+    });
+    setBlocks((prev) => {
+      const idx = activeIndex >= 0 ? activeIndex : prev.length - 1;
+      const next = [...prev];
+      next.splice(idx + 1, 0, nb);
+      return next;
+    });
+    setActiveId(nb.id);
+    setTimeout(() => blockRefs.current[nb.id]?.focus(), 30);
+  };
+
+  const handleDuplicateBlock = () => {
+    if (!activeBlock) return;
+    const { id: _id, ...copy } = activeBlock;
+    const nb = makeBlock(copy);
+    setBlocks((prev) => {
+      const idx = activeIndex >= 0 ? activeIndex : prev.length - 1;
+      const next = [...prev];
+      next.splice(idx + 1, 0, nb);
+      return next;
+    });
+    setActiveId(nb.id);
+    setTimeout(() => blockRefs.current[nb.id]?.focus(), 30);
+  };
+
+  const handleMoveBlock = (direction: -1 | 1) => {
+    if (activeIndex < 0) return;
+    const target = activeIndex + direction;
+    if (target < 0 || target >= blocks.length) return;
+    setBlocks((prev) => {
+      const next = [...prev];
+      const [moved] = next.splice(activeIndex, 1);
+      next.splice(target, 0, moved);
+      return next;
+    });
+  };
+
+  const handleDeleteBlock = () => {
+    if (blocks.length <= 1 || activeIndex < 0) return;
+    const nextActive = blocks[activeIndex - 1] ?? blocks[activeIndex + 1];
+    setBlocks((prev) => prev.filter((b) => b.id !== activeId));
+    setActiveId(nextActive.id);
+    setTimeout(() => blockRefs.current[nextActive.id]?.focus(), 30);
+  };
+
   const handleBackspaceEmpty = (id: string) => {
     if (blocks.length <= 1) return;
     const idx = blocks.findIndex((b) => b.id === id);
@@ -866,8 +1502,11 @@ function NoteEditorModal({
   };
 
   const handleSave = () => {
-    const text = blocks.map((b) => b.text).join("\n");
-    onSave(text, noteColor, blocks, title);
+    const normalizedBlocks = blocks.length
+      ? blocks
+      : [makeBlock()];
+    const text = normalizedBlocks.map((b) => b.text).join("\n").trim();
+    onSave(text, noteColor, normalizedBlocks, title.trim());
   };
 
   return (
@@ -882,7 +1521,7 @@ function NoteEditorModal({
             {initialNote ? t.diary.editEntry : t.diary.addNote}
           </Text>
           <Pressable
-            style={[editorStyles.saveBtn, { backgroundColor: hasContent ? "#33333322" : "#33333308" }]}
+            style={[editorStyles.saveBtn, { backgroundColor: hasContent ? "#33333324" : "#33333308" }]}
             onPress={hasContent ? handleSave : undefined}
             disabled={!hasContent}
             hitSlop={10}
@@ -903,16 +1542,8 @@ function NoteEditorModal({
             {/* Title input */}
             <TextInput
               ref={titleRef}
-              style={{
-                fontSize: 18,
-                fontFamily: "System",
-                fontWeight: "600",
-                color: "#333",
-                paddingHorizontal: 20,
-                paddingVertical: 12,
-                minHeight: 44,
-              }}
-              placeholder="Note title..."
+              style={[editorStyles.titleInput, { textAlign: isRTL ? "right" : "left" }]}
+              placeholder={l("عنوان الملاحظة...", "Note title...")}
               placeholderTextColor="#aaa"
               value={title}
               onChangeText={setTitle}
@@ -925,6 +1556,7 @@ function NoteEditorModal({
                 block={block}
                 isActive={block.id === activeId}
                 onChangeText={handleChangeText}
+                onUpdateBlock={updateBlock}
                 onFocus={setActiveId}
                 onEnter={handleEnter}
                 onBackspaceEmpty={handleBackspaceEmpty}
@@ -941,6 +1573,16 @@ function NoteEditorModal({
             hasEmoji={hasEmojiInBlock}
             emojiScale={emojiScale}
             onEmojiScale={(s) => activeId && updateBlock(activeId, { emojiScale: s })}
+            onAddBlock={handleAddBlock}
+            onDuplicateBlock={handleDuplicateBlock}
+            onMoveBlock={handleMoveBlock}
+            onDeleteBlock={handleDeleteBlock}
+            onBulletSymbolChange={(symbol) =>
+              activeId && updateBlock(activeId, { type: "bullet", bulletSymbol: symbol })
+            }
+            canMoveUp={activeIndex > 0}
+            canMoveDown={activeIndex >= 0 && activeIndex < blocks.length - 1}
+            canDelete={blocks.length > 1}
           />
         </KeyboardAvoidingView>
       </View>
@@ -955,6 +1597,15 @@ const editorStyles = StyleSheet.create({
   topTitle: { fontSize: 16, fontFamily: "Inter_600SemiBold", color: "#333", flex: 1, textAlign: "center" },
   saveBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
   saveBtnTxt: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  titleInput: {
+    color: "#333",
+    fontFamily: "Inter_700Bold",
+    fontSize: 24,
+    minHeight: 58,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 10,
+  },
 });
 
 // ─── Emoji-aware text renderer (for note card preview) ───────────────────────
@@ -1001,72 +1652,152 @@ function NoteCard({
 }: {
   note: DiaryNote; onPress: () => void; onDelete: () => void;
 }) {
-  const { isRTL } = useLanguage();
+  const { isRTL, l } = useLanguage();
   const rich = note.richContent;
+  const previewBlocks = rich?.filter((block) => block.text.trim()).slice(0, 5) ?? [];
+  const wordCount = note.text.trim().split(/\s+/).filter(Boolean).length;
+  const noteTime = new Date(note.createdAt).toLocaleTimeString(isRTL ? "ar-SA" : "en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+
   return (
     <Pressable style={[noteCardStyles.card, { backgroundColor: note.color }]} onPress={onPress}>
-      <Pressable style={noteCardStyles.closeBtn} onPress={onDelete} hitSlop={10}>
-        <Icon name="close" size={14} color="#555" />
+      <View pointerEvents="none" style={noteCardStyles.cardGlow} />
+      <Pressable
+        style={[noteCardStyles.closeBtn, isRTL ? { left: 10 } : { right: 10 }]}
+        onPress={onDelete}
+        hitSlop={10}
+      >
+        <Icon name="trash-can-outline" size={14} color="#9B315A" />
       </Pressable>
 
-      {note.title && (
-        <Text style={[noteCardStyles.title, { textAlign: isRTL ? "right" : "left" }]} numberOfLines={1}>
-          {note.title}
+      <View style={[noteCardStyles.metaRow, { flexDirection: isRTL ? "row-reverse" : "row" }]}>
+        <View style={noteCardStyles.metaPill}>
+          <Icon name="time-outline" size={12} color="#7A5264" />
+          <Text style={noteCardStyles.metaText}>{noteTime}</Text>
+        </View>
+        <Text style={noteCardStyles.metaText}>
+          {wordCount} {l("كلمة", "words")}
         </Text>
-      )}
+      </View>
 
-      {rich && rich.length > 0 ? (
-        <View style={{ paddingRight: 32 }}>
-          {rich.slice(0, 5).map((block, i) => {
+      <Text style={[noteCardStyles.title, { textAlign: isRTL ? "right" : "left", paddingRight: isRTL ? 0 : 30, paddingLeft: isRTL ? 30 : 0 }]} numberOfLines={1}>
+        {note.title?.trim() || l("ملاحظة بدون عنوان", "Untitled note")}
+      </Text>
+
+      {previewBlocks.length > 0 ? (
+        <View style={{ paddingRight: isRTL ? 0 : 32, paddingLeft: isRTL ? 32 : 0 }}>
+          {previewBlocks.map((block, i) => {
+            if (block.type === "audio") {
+              return (
+                <View key={block.id} style={noteCardStyles.audioPreview}>
+                  <Icon name="chatbubble-ellipses-outline" size={14} color="#9B315A" />
+                  <Text style={noteCardStyles.audioPreviewText} numberOfLines={1}>
+                    {block.text?.trim() || l("ملاحظة صوتية", "Voice note")} · {formatAudioDuration(block.audioDurationMillis)}
+                  </Text>
+                </View>
+              );
+            }
             const sz = BLOCK_SIZES[block.type];
             const scale = block.emojiScale ?? 1;
-            // Cap preview at 80px so card doesn't overflow
-            const previewSize = Math.min(sz.fontSize * scale, 80);
-            const blockStyle = {
+            const previewSize = Math.min(sz.fontSize * scale, 56);
+            const blockStyle: TextStyle = {
               fontSize: previewSize,
-              lineHeight: previewSize * 1.3,
+              lineHeight: previewSize * 1.28,
               fontFamily: blockFontFamily(block),
-              fontStyle: block.italic ? "italic" : "normal" as const,
-              textDecorationLine: block.underline ? "underline" : "none" as const,
+              fontWeight: block.bold ? "700" : "400",
+              fontStyle: block.italic ? "italic" : "normal",
+              textDecorationLine: block.underline ? "underline" : "none",
               color: block.color,
-              textAlign: isRTL ? "right" : "left" as const,
+              textAlign: isRTL ? "right" : "left",
             };
             const nLines = scale > 3 ? 1 : (i === 0 && block.type !== "body" ? 1 : 2);
             return (
-              <Text key={block.id} numberOfLines={nLines} style={blockStyle}>{block.text}</Text>
+              <View key={block.id} style={block.type === "bullet" ? noteCardStyles.bulletPreviewRow : undefined}>
+                {block.type === "bullet" && (
+                  <Text style={noteCardStyles.bulletPreviewSymbol}>
+                    {block.bulletSymbol ?? BULLET_SYMBOLS[0]}
+                  </Text>
+                )}
+                <EmojiText
+                  numberOfLines={nLines}
+                  style={blockStyle}
+                  emojiScale={Math.min(scale, 3)}
+                  text={block.text}
+                />
+              </View>
             );
           })}
         </View>
-      ) : (
-        <Text style={[noteCardStyles.text, { textAlign: isRTL ? "right" : "left" }]} numberOfLines={4}>
+      ) : note.text.trim() ? (
+        <Text style={[noteCardStyles.text, { textAlign: isRTL ? "right" : "left", paddingRight: isRTL ? 0 : 30, paddingLeft: isRTL ? 30 : 0 }]} numberOfLines={4}>
           {note.text}
+        </Text>
+      ) : (
+        <Text style={[noteCardStyles.text, noteCardStyles.emptyPreview, { textAlign: isRTL ? "right" : "left" }]} numberOfLines={2}>
+          {l("اكتبي شيئاً لطيفاً هنا", "Write something lovely here")}
         </Text>
       )}
 
-      <View style={noteCardStyles.editHint}>
-        <Icon name="pencil" size={11} color="#888" />
+      <View style={[noteCardStyles.editHint, { alignItems: isRTL ? "flex-start" : "flex-end" }]}>
+        <View style={noteCardStyles.editPill}>
+          <Icon name="pencil" size={11} color="#7A5264" />
+          <Text style={noteCardStyles.editText}>{l("تعديل", "Edit")}</Text>
+        </View>
       </View>
     </Pressable>
   );
 }
 
 const noteCardStyles = StyleSheet.create({
-  card: { borderRadius: 18, padding: 16, marginBottom: 10, position: "relative" },
-  title: { fontSize: 16, fontFamily: "System", fontWeight: "600", color: "#333", marginBottom: 8 },
+  card: {
+    borderColor: "rgba(255,255,255,0.58)",
+    borderRadius: 20,
+    borderWidth: 1,
+    elevation: 2,
+    marginBottom: 12,
+    overflow: "hidden",
+    padding: 16,
+    position: "relative",
+    shadowColor: "#C06",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.08,
+    shadowRadius: 14,
+  },
+  cardGlow: {
+    backgroundColor: "rgba(255,255,255,0.2)",
+    borderRadius: 999,
+    height: 120,
+    position: "absolute",
+    right: -28,
+    top: -54,
+    width: 120,
+  },
+  title: { fontSize: 17, fontFamily: "Inter_700Bold", color: "#333", marginBottom: 8 },
   closeBtn: {
     position: "absolute",
     top: 10,
-    right: 10,
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: "rgba(0,0,0,0.08)",
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: "rgba(255,255,255,0.48)",
     alignItems: "center",
     justifyContent: "center",
     zIndex: 2,
   },
   text: { fontSize: 15, fontFamily: "Inter_400Regular", lineHeight: 22, paddingRight: 30 },
-  editHint: { marginTop: 8, alignItems: "flex-end" },
+  emptyPreview: { color: "rgba(51,51,51,0.54)", fontStyle: "italic" },
+  metaRow: { alignItems: "center", gap: 8, marginBottom: 10, paddingRight: 34 },
+  metaPill: { alignItems: "center", backgroundColor: "rgba(255,255,255,0.42)", borderRadius: 14, flexDirection: "row", gap: 4, paddingHorizontal: 8, paddingVertical: 4 },
+  metaText: { color: "#7A5264", fontFamily: "Inter_600SemiBold", fontSize: 11 },
+  audioPreview: { alignItems: "center", backgroundColor: "rgba(255,255,255,0.38)", borderRadius: 14, flexDirection: "row", gap: 6, marginTop: 4, paddingHorizontal: 9, paddingVertical: 7 },
+  audioPreviewText: { color: "#7A5264", flex: 1, fontFamily: "Inter_600SemiBold", fontSize: 12 },
+  bulletPreviewRow: { alignItems: "flex-start", flexDirection: "row", gap: 8 },
+  bulletPreviewSymbol: { color: "#C2185B", fontSize: 16, lineHeight: 24, marginTop: 0, minWidth: 20, textAlign: "center" },
+  editHint: { marginTop: 10 },
+  editPill: { alignItems: "center", backgroundColor: "rgba(255,255,255,0.42)", borderRadius: 14, flexDirection: "row", gap: 4, paddingHorizontal: 8, paddingVertical: 4 },
+  editText: { color: "#7A5264", fontFamily: "Inter_600SemiBold", fontSize: 11 },
 });
 
 // ─── Notes section ────────────────────────────────────────────────────────────
@@ -1079,7 +1810,7 @@ function NotesSection() {
   const [editingNote, setEditingNote] = useState<DiaryNote | null>(null);
   const todayK = todayKey();
 
-  const allNotes = (data.diaryNotes ?? []).sort((a, b) => b.createdAt - a.createdAt);
+  const allNotes = [...(data.diaryNotes ?? [])].sort((a, b) => b.createdAt - a.createdAt);
   const todayNotes = allNotes.filter((n) => n.date === todayK);
   const pastNotes = allNotes.filter((n) => n.date !== todayK);
 
@@ -1095,12 +1826,7 @@ function NotesSection() {
 
   const handleSave = async (text: string, color: string, richContent: RichBlock[], title?: string) => {
     if (editingNote) {
-      await updateNote(editingNote.id, text, color, richContent);
-      // Update title separately if needed
-      if (title !== undefined) {
-        const updatedNote = { ...editingNote, title };
-        await saveNote(updatedNote);
-      }
+      await updateNote(editingNote.id, text, color, richContent, title);
     } else {
       await saveNote({
         id: `${todayK}-${Date.now()}`,

@@ -38,12 +38,15 @@ export interface DiaryEntry {
 export interface RichBlock {
   id: string;
   text: string;
-  type: 'h1' | 'h2' | 'h3' | 'body' | 'small';
+  type: 'h1' | 'h2' | 'h3' | 'body' | 'small' | 'bullet' | 'audio';
   bold: boolean;
   italic: boolean;
   underline: boolean;
   color: string;
-  fontStyle: 'sans' | 'serif' | 'mono';
+  fontStyle: 'sans' | 'soft' | 'serif' | 'mono' | 'hand' | 'fancy';
+  audioUri?: string;
+  audioDurationMillis?: number;
+  bulletSymbol?: string;
   emojiScale?: number; // 1.0–3.0, default 1
 }
 
@@ -78,7 +81,7 @@ interface AppContextType {
   deleteDiaryEntry: (dateKey: string) => Promise<void>;
   saveNote: (note: DiaryNote) => Promise<void>;
   deleteNote: (noteId: string) => Promise<void>;
-  updateNote: (noteId: string, text: string, color: string, richContent?: RichBlock[]) => Promise<void>;
+  updateNote: (noteId: string, text: string, color: string, richContent?: RichBlock[], title?: string) => Promise<void>;
   toggleRoutineStep: (routineId: string, stepId: string) => Promise<void>;
   isStepCompleted: (routineId: string, stepId: string) => boolean;
   getRoutineCompletionPercent: (routineId: string, totalSteps: number) => number;
@@ -335,7 +338,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const saveNote = useCallback(
     async (note: DiaryNote) => {
       const existing = data.diaryNotes ?? [];
-      await save({ ...data, diaryNotes: [...existing, note] });
+      const next = existing.some((n) => n.id === note.id)
+        ? existing.map((n) => (n.id === note.id ? note : n))
+        : [...existing, note];
+      await save({ ...data, diaryNotes: next });
     },
     [data, save]
   );
@@ -349,9 +355,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   );
 
   const updateNote = useCallback(
-    async (noteId: string, text: string, color: string, richContent?: RichBlock[]) => {
+    async (noteId: string, text: string, color: string, richContent?: RichBlock[], title?: string) => {
       const updated = (data.diaryNotes ?? []).map((n) =>
-        n.id === noteId ? { ...n, text, color, ...(richContent ? { richContent } : {}) } : n
+        n.id === noteId ? { ...n, text, color, title, ...(richContent ? { richContent } : {}) } : n
       );
       await save({ ...data, diaryNotes: updated });
     },

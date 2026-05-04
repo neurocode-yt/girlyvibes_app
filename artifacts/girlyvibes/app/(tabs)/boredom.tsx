@@ -5,6 +5,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import React, { useEffect, useRef, useState } from "react";
 import {
   Animated,
+  Dimensions,
   Platform,
   PanResponder,
   Pressable,
@@ -25,27 +26,99 @@ import { getActivityImage } from "@/lib/activityImages";
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
-const CARD_SLOT = 244; // image 180 + body ~50 + gap 14
+const LIST_GAP = 14;
+const CARD_HEIGHT = 252; // image 180 + fixed body 72
+const CARD_SLOT = CARD_HEIGHT + LIST_GAP;
+const DRAG_HOLD_DELAY_MS = 600;
+const AUTO_SCROLL_EDGE = 110;
+const AUTO_SCROLL_STEP = 9;
+const SCREEN_HEIGHT = Dimensions.get("window").height;
+
+const FLOATING_EMOJIS = [
+  { emoji: "💗", side: "top", x: "8%", y: -20, drift: -14, delay: 0 },
+  { emoji: "🥰", side: "top", x: "35%", y: -24, drift: -18, delay: 80 },
+  { emoji: "✨", side: "top", x: "66%", y: -18, drift: -12, delay: 160 },
+  { emoji: "🩷", side: "top", x: "88%", y: -22, drift: -16, delay: 240 },
+  { emoji: "🎀", side: "right", x: "100%", y: 36, drift: 12, delay: 120 },
+  { emoji: "💞", side: "right", x: "100%", y: 132, drift: 16, delay: 280 },
+  { emoji: "💗", side: "bottom", x: "18%", y: CARD_HEIGHT - 8, drift: 14, delay: 40 },
+  { emoji: "🥰", side: "bottom", x: "48%", y: CARD_HEIGHT - 4, drift: 18, delay: 200 },
+  { emoji: "✨", side: "bottom", x: "78%", y: CARD_HEIGHT - 10, drift: 12, delay: 360 },
+  { emoji: "🩷", side: "left", x: -12, y: 44, drift: -12, delay: 100 },
+  { emoji: "🎀", side: "left", x: -14, y: 120, drift: -16, delay: 260 },
+  { emoji: "💞", side: "left", x: -10, y: 198, drift: -12, delay: 420 },
+] as const;
 
 // ─── Draggable Card ────────────────────────────────────────────────────────────
 
 type DraggableCardProps = {
   activity: Activity;
   index: number;
-  totalCount: number;
   highlighted: boolean;
-  onRegisterSlotOffset: (id: string, offset: Animated.Value) => void;
-  onDragStart: (index: number) => void;
-  onDragMove: (index: number, dy: number) => void;
-  onDragEnd: (index: number, dy: number) => void;
+  isActive: boolean;
+  positionY: Animated.Value;
+  onDragStart: (id: string) => void;
+  onDragMove: (id: string, dy: number, moveY: number) => void;
+  onDragEnd: (id: string, dy: number) => void;
 };
+
+function FloatingEmojiLayer({ progress }: { progress: Animated.Value }) {
+  return (
+    <View pointerEvents="none" style={styles.floatLayer}>
+      {FLOATING_EMOJIS.map((item, index) => {
+        const horizontalDrift = item.side === "left" || item.side === "right";
+        const opacity = progress.interpolate({
+          inputRange: [0, 0.5, 1],
+          outputRange: [0.18, 0.39 + (item.delay % 160) / 1600, 0.25],
+        });
+        const translateX = horizontalDrift
+          ? progress.interpolate({
+              inputRange: [0, 1],
+              outputRange: [0, item.drift],
+            })
+          : 0;
+        const translateY = horizontalDrift
+          ? 0
+          : progress.interpolate({
+              inputRange: [0, 1],
+              outputRange: [0, item.drift],
+            });
+        const scale = progress.interpolate({
+          inputRange: [0, 0.5, 1],
+          outputRange: [0.86, 1.08, 0.92],
+        });
+        const rotate = progress.interpolate({
+          inputRange: [0, 1],
+          outputRange: [`${index % 2 === 0 ? -8 : 8}deg`, `${index % 2 === 0 ? 9 : -9}deg`],
+        });
+
+        return (
+          <Animated.Text
+            key={`${item.emoji}-${index}`}
+            style={[
+              styles.floatEmoji,
+              {
+                left: item.x,
+                top: item.y,
+                opacity,
+                transform: [{ translateX }, { translateY }, { scale }, { rotate }],
+              },
+            ]}
+          >
+            {item.emoji}
+          </Animated.Text>
+        );
+      })}
+    </View>
+  );
+}
 
 function DraggableCard({
   activity,
   index,
-  totalCount,
   highlighted,
-  onRegisterSlotOffset,
+  isActive,
+  positionY,
   onDragStart,
   onDragMove,
   onDragEnd,
@@ -53,35 +126,20 @@ function DraggableCard({
   const colors = useColors();
   const { l } = useLanguage();
   const image = getActivityImage(activity.imageKey);
-  const [isActive, setIsActive] = useState(false);
-
-  // Own gesture translation (goes up/down with finger)
-  const ownDragY = useRef(new Animated.Value(0)).current;
-  // Parent-controlled shift (neighbors slide out of the way)
-  const slotOffset = useRef(new Animated.Value(0)).current;
-  // Combined Y = own drag + neighbor shift — stable ref
-  const combinedY = useRef(Animated.add(ownDragY, slotOffset)).current;
 
   const scale = useRef(new Animated.Value(1)).current;
   const entryOpacity = useRef(new Animated.Value(0)).current;
-  const entryTranslate = useRef(new Animated.Value(24)).current;
+  const floatProgress = useRef(new Animated.Value(0)).current;
 
   // Refs so PanResponder closures always have current values
-  const indexRef = useRef(index);
-  indexRef.current = index;
-  const totalCountRef = useRef(totalCount);
-  totalCountRef.current = totalCount;
+  const activityIdRef = useRef(activity.id);
+  activityIdRef.current = activity.id;
   const onDragStartRef = useRef(onDragStart);
   onDragStartRef.current = onDragStart;
   const onDragMoveRef = useRef(onDragMove);
   onDragMoveRef.current = onDragMove;
   const onDragEndRef = useRef(onDragEnd);
   onDragEndRef.current = onDragEnd;
-
-  // Register this card's slotOffset with the parent
-  useEffect(() => {
-    onRegisterSlotOffset(activity.id, slotOffset);
-  }, [activity.id]);
 
   // Entry animation (only on first mount)
   const entryDone = useRef(false);
@@ -95,14 +153,37 @@ function DraggableCard({
         delay: index * 60,
         useNativeDriver: true,
       }),
-      Animated.timing(entryTranslate, {
-        toValue: 0,
-        duration: 380,
-        delay: index * 60,
-        useNativeDriver: true,
-      }),
     ]).start();
   }, []);
+
+  useEffect(() => {
+    if (!isActive) {
+      floatProgress.stopAnimation();
+      floatProgress.setValue(0);
+      return;
+    }
+
+    floatProgress.setValue(0);
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(floatProgress, {
+          toValue: 1,
+          duration: 1400,
+          useNativeDriver: true,
+        }),
+        Animated.timing(floatProgress, {
+          toValue: 0,
+          duration: 1200,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    animation.start();
+
+    return () => {
+      animation.stop();
+    };
+  }, [floatProgress, isActive]);
 
   const isLongPressed = useRef(false);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -115,21 +196,19 @@ function DraggableCard({
         isLongPressed.current = false;
         longPressTimer.current = setTimeout(() => {
           isLongPressed.current = true;
-          setIsActive(true);
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-          onDragStartRef.current(indexRef.current);
+          onDragStartRef.current(activityIdRef.current);
           Animated.spring(scale, {
             toValue: 1.06,
             useNativeDriver: true,
             speed: 22,
             bounciness: 4,
           }).start();
-        }, 380);
+        }, DRAG_HOLD_DELAY_MS);
       },
       onPanResponderMove: (_, g) => {
         if (!isLongPressed.current) return;
-        ownDragY.setValue(g.dy);
-        onDragMoveRef.current(indexRef.current, g.dy);
+        onDragMoveRef.current(activityIdRef.current, g.dy, g.moveY);
       },
       onPanResponderRelease: (_, g) => {
         if (longPressTimer.current) {
@@ -137,25 +216,8 @@ function DraggableCard({
           longPressTimer.current = null;
         }
         if (isLongPressed.current) {
-          const from = indexRef.current;
-          const total = totalCountRef.current;
-          const to = Math.max(0, Math.min(total - 1, from + Math.round(g.dy / CARD_SLOT)));
-
-          // Commit reorder + reset neighbor offsets
-          onDragEndRef.current(from, g.dy);
-
-          // After setOrderedItems, the card's layout position jumps by (to-from)*CARD_SLOT.
-          // Correct ownDragY so the card sits exactly at its new layout slot visually,
-          // then spring the tiny residual to 0 — avoids the card flying from the wrong spot.
-          const residual = g.dy - (to - from) * CARD_SLOT;
-          ownDragY.setValue(residual);
-
-          Animated.parallel([
-            Animated.spring(ownDragY, { toValue: 0, useNativeDriver: true, speed: 28, bounciness: 3 }),
-            Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 22, bounciness: 0 }),
-          ]).start(({ finished }) => {
-            if (finished) setIsActive(false);
-          });
+          onDragEndRef.current(activityIdRef.current, g.dy);
+          Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 22, bounciness: 0 }).start();
         }
         isLongPressed.current = false;
       },
@@ -165,12 +227,9 @@ function DraggableCard({
           longPressTimer.current = null;
         }
         isLongPressed.current = false;
-        onDragEndRef.current(indexRef.current, 0);
-        ownDragY.setValue(0);
+        onDragEndRef.current(activityIdRef.current, 0);
         Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 22, bounciness: 0 })
-          .start(({ finished }) => {
-            if (finished) setIsActive(false);
-          });
+          .start();
       },
     })
   ).current;
@@ -178,9 +237,14 @@ function DraggableCard({
   return (
     <Animated.View
       style={{
+        left: 0,
         opacity: entryOpacity,
-        transform: [{ translateY: entryTranslate }],
-        zIndex: isActive ? 999 : 1,
+        position: "absolute",
+        right: 0,
+        top: 0,
+        height: CARD_HEIGHT,
+        transform: [{ translateY: positionY }],
+        zIndex: isActive ? 1000 : 1,
         elevation: isActive ? 16 : 1,
       }}
     >
@@ -188,10 +252,15 @@ function DraggableCard({
         {...panResponder.panHandlers}
         style={[
           styles.cardOuter,
-          { transform: [{ translateY: combinedY }, { scale }] },
+          {
+            transform: [{ scale }],
+            zIndex: isActive ? 1000 : 0,
+            elevation: isActive ? 18 : 1,
+          },
           isActive && styles.cardActive,
         ]}
       >
+        {isActive && <FloatingEmojiLayer progress={floatProgress} />}
         <View
           style={[
             styles.card,
@@ -279,96 +348,160 @@ function DraggableCard({
 
 type SortableListProps = {
   highlighted: string | null;
+  scrollYRef: React.MutableRefObject<number>;
+  onAutoScroll: (delta: number) => void;
   onScrollToggle: (enabled: boolean) => void;
 };
 
-function SortableActivityList({ highlighted, onScrollToggle }: SortableListProps) {
+function SortableActivityList({
+  highlighted,
+  scrollYRef,
+  onAutoScroll,
+  onScrollToggle,
+}: SortableListProps) {
   const { activities } = useActivities();
   const [orderedItems, setOrderedItems] = useState<Activity[]>(activities);
+  const [activeId, setActiveId] = useState<string | null>(null);
 
-  const orderedItemsRef = useRef(orderedItems);
-  orderedItemsRef.current = orderedItems;
+  const positionMap = useRef<Map<string, Animated.Value>>(new Map()).current;
+  const orderRef = useRef<string[]>(activities.map((activity) => activity.id));
+  const previewOrderRef = useRef<string[]>(orderRef.current);
+  const activeIdRef = useRef<string | null>(null);
+  const dragStartIndexRef = useRef(0);
+  const dragStartScrollYRef = useRef(0);
 
-  // Map of activityId → slotOffset Animated.Value (owned by each card)
-  const slotOffsetMap = useRef<Map<string, Animated.Value>>(new Map()).current;
-  const hoverIndexRef = useRef<number | null>(null);
+  const getPosition = (id: string, index: number) => {
+    let position = positionMap.get(id);
+    if (!position) {
+      position = new Animated.Value(index * CARD_SLOT);
+      positionMap.set(id, position);
+    }
+    return position;
+  };
+
+  const moveId = (ids: string[], fromIndex: number, toIndex: number) => {
+    const next = [...ids];
+    const [moved] = next.splice(fromIndex, 1);
+    next.splice(toIndex, 0, moved);
+    return next;
+  };
+
+  const animatePositions = (ids: string[], activeCardId: string | null) => {
+    ids.forEach((id, index) => {
+      if (id === activeCardId) return;
+      Animated.spring(getPosition(id, index), {
+        toValue: index * CARD_SLOT,
+        useNativeDriver: true,
+        speed: 34,
+        bounciness: 0,
+      }).start();
+    });
+  };
 
   useEffect(() => {
-    setOrderedItems(activities);
+    const activityById = new Map(activities.map((activity) => [activity.id, activity]));
+    const previousOrder = orderRef.current.length
+      ? orderRef.current
+      : activities.map((activity) => activity.id);
+    const nextOrder = [
+      ...previousOrder.filter((id) => activityById.has(id)),
+      ...activities.map((activity) => activity.id).filter((id) => !previousOrder.includes(id)),
+    ];
+
+    orderRef.current = nextOrder;
+    previewOrderRef.current = nextOrder;
+    setOrderedItems(nextOrder.map((id) => activityById.get(id)).filter(Boolean) as Activity[]);
+    nextOrder.forEach((id, index) => {
+      getPosition(id, index).setValue(index * CARD_SLOT);
+    });
   }, [activities]);
 
-  const registerSlotOffset = (id: string, offset: Animated.Value) => {
-    slotOffsetMap.set(id, offset);
-  };
+  const onDragStart = (id: string) => {
+    const fromIndex = orderRef.current.indexOf(id);
+    if (fromIndex < 0) return;
 
-  const updateNeighborOffsets = (fromIndex: number, toIndex: number) => {
-    const items = orderedItemsRef.current;
-    items.forEach((item, i) => {
-      if (i === fromIndex) return;
-      let target = 0;
-      if (fromIndex < toIndex && i > fromIndex && i <= toIndex) {
-        target = -CARD_SLOT; // dragging DOWN → neighbors above the gap shift up
-      } else if (fromIndex > toIndex && i >= toIndex && i < fromIndex) {
-        target = CARD_SLOT;  // dragging UP → neighbors below the gap shift down
-      }
-      const offset = slotOffsetMap.get(item.id);
-      if (offset) {
-        Animated.spring(offset, {
-          toValue: target,
-          useNativeDriver: true,
-          speed: 35,
-          bounciness: 0,
-        }).start();
-      }
-    });
-  };
-
-  const resetNeighborOffsets = () => {
-    slotOffsetMap.forEach((offset) => {
-      offset.setValue(0);
-    });
-  };
-
-  const onDragStart = (fromIndex: number) => {
-    hoverIndexRef.current = fromIndex;
+    activeIdRef.current = id;
+    dragStartIndexRef.current = fromIndex;
+    dragStartScrollYRef.current = scrollYRef.current;
+    previewOrderRef.current = orderRef.current;
+    setActiveId(id);
     onScrollToggle(false);
+    getPosition(id, fromIndex).stopAnimation((value) => {
+      getPosition(id, fromIndex).setValue(value);
+    });
   };
 
-  const onDragMove = (fromIndex: number, dy: number) => {
-    const n = orderedItemsRef.current.length;
-    const newHover = Math.max(0, Math.min(n - 1, fromIndex + Math.round(dy / CARD_SLOT)));
-    if (newHover !== hoverIndexRef.current) {
-      hoverIndexRef.current = newHover;
-      updateNeighborOffsets(fromIndex, newHover);
+  const onDragMove = (id: string, dy: number, moveY: number) => {
+    if (activeIdRef.current !== id) return;
+
+    const order = orderRef.current;
+    const fromIndex = dragStartIndexRef.current;
+    const adjustedDy = dy + (scrollYRef.current - dragStartScrollYRef.current);
+    const nextIndex = Math.max(0, Math.min(order.length - 1, fromIndex + Math.round(adjustedDy / CARD_SLOT)));
+    getPosition(id, fromIndex).setValue(fromIndex * CARD_SLOT + adjustedDy);
+
+    if (moveY > SCREEN_HEIGHT - AUTO_SCROLL_EDGE) {
+      onAutoScroll(AUTO_SCROLL_STEP);
+    } else if (moveY < AUTO_SCROLL_EDGE) {
+      onAutoScroll(-AUTO_SCROLL_STEP);
+    }
+
+    if (previewOrderRef.current.indexOf(id) !== nextIndex) {
+      previewOrderRef.current = moveId(order, fromIndex, nextIndex);
+      animatePositions(previewOrderRef.current, id);
       Haptics.selectionAsync();
     }
   };
 
-  const onDragEnd = (fromIndex: number, dy: number) => {
-    const n = orderedItemsRef.current.length;
-    const to = Math.max(0, Math.min(n - 1, fromIndex + Math.round(dy / CARD_SLOT)));
-    resetNeighborOffsets();
-    hoverIndexRef.current = null;
+  const onDragEnd = (id: string, dy: number) => {
+    if (activeIdRef.current !== id) return;
+
+    const order = orderRef.current;
+    const fromIndex = dragStartIndexRef.current;
+    const adjustedDy = dy + (scrollYRef.current - dragStartScrollYRef.current);
+    const fallbackIndex = Math.max(0, Math.min(order.length - 1, fromIndex + Math.round(adjustedDy / CARD_SLOT)));
+    const finalOrder = previewOrderRef.current.includes(id)
+      ? previewOrderRef.current
+      : moveId(order, fromIndex, fallbackIndex);
+    const finalIndex = finalOrder.indexOf(id);
+    const activityById = new Map(activities.map((activity) => [activity.id, activity]));
+
+    activeIdRef.current = null;
+    orderRef.current = finalOrder;
+    previewOrderRef.current = finalOrder;
     onScrollToggle(true);
-    if (fromIndex !== to) {
-      const newItems = [...orderedItemsRef.current];
-      const [moved] = newItems.splice(fromIndex, 1);
-      newItems.splice(to, 0, moved);
-      setOrderedItems(newItems);
+    setOrderedItems(finalOrder.map((activityId) => activityById.get(activityId)).filter(Boolean) as Activity[]);
+    animatePositions(finalOrder, id);
+
+    Animated.spring(getPosition(id, finalIndex), {
+      toValue: finalIndex * CARD_SLOT,
+      useNativeDriver: true,
+      speed: 34,
+      bounciness: 0,
+    }).start(() => {
+      setActiveId(null);
+    });
+
+    if (fromIndex !== finalIndex) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
   };
 
   return (
-    <View style={styles.list}>
+    <View
+      style={[
+        styles.list,
+        { height: Math.max(0, orderedItems.length * CARD_SLOT - LIST_GAP) },
+      ]}
+    >
       {orderedItems.map((activity, index) => (
         <DraggableCard
           key={activity.id}
           activity={activity}
           index={index}
-          totalCount={orderedItems.length}
           highlighted={highlighted === activity.id}
-          onRegisterSlotOffset={registerSlotOffset}
+          isActive={activeId === activity.id}
+          positionY={getPosition(activity.id, index)}
           onDragStart={onDragStart}
           onDragMove={onDragMove}
           onDragEnd={onDragEnd}
@@ -591,6 +724,8 @@ export default function BoredomScreen() {
   const [highlighted, setHighlighted] = useState<string | null>(null);
   const [scrollEnabled, setScrollEnabled] = useState(true);
 
+  const scrollRef = useRef<ScrollView>(null);
+  const scrollYRef = useRef(0);
   const spinValue = useRef(new Animated.Value(0)).current;
   const topInset = Platform.OS === "web" ? 67 : insets.top;
 
@@ -612,12 +747,23 @@ export default function BoredomScreen() {
     setTimeout(() => setHighlighted(null), 4000);
   }
 
+  function autoScroll(delta: number) {
+    const nextY = Math.max(0, scrollYRef.current + delta);
+    scrollYRef.current = nextY;
+    scrollRef.current?.scrollTo({ y: nextY, animated: false });
+  }
+
   return (
     <ScrollView
+      ref={scrollRef}
       style={[styles.container, { backgroundColor: colors.background }]}
       contentContainerStyle={{
         paddingBottom: Platform.OS === "web" ? 100 : 120,
       }}
+      onScroll={(event) => {
+        scrollYRef.current = event.nativeEvent.contentOffset.y;
+      }}
+      scrollEventThrottle={16}
       showsVerticalScrollIndicator={false}
       scrollEnabled={scrollEnabled}
     >
@@ -690,6 +836,8 @@ export default function BoredomScreen() {
 
         <SortableActivityList
           highlighted={highlighted}
+          scrollYRef={scrollYRef}
+          onAutoScroll={autoScroll}
           onScrollToggle={setScrollEnabled}
         />
 
@@ -759,11 +907,13 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   list: {
-    gap: 14,
     marginBottom: 28,
+    position: "relative",
   },
   cardOuter: {
     borderRadius: 20,
+    position: "relative",
+    height: CARD_HEIGHT,
   },
   cardActive: {
     shadowColor: "#000",
@@ -771,6 +921,24 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.18,
     shadowRadius: 16,
     elevation: 12,
+  },
+  floatLayer: {
+    bottom: 0,
+    left: 0,
+    overflow: "visible",
+    pointerEvents: "none",
+    position: "absolute",
+    right: 0,
+    top: 0,
+    zIndex: 3,
+  },
+  floatEmoji: {
+    color: "#F05C94",
+    fontSize: 22,
+    position: "absolute",
+    textShadowColor: "rgba(255,255,255,0.65)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 8,
   },
   card: {
     borderRadius: 20,
@@ -827,8 +995,10 @@ const styles = StyleSheet.create({
     zIndex: 2,
   },
   cardBody: {
+    height: 72,
+    justifyContent: "center",
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingVertical: 10,
   },
   cardTitle: {
     fontSize: 16,

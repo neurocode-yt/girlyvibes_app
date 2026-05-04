@@ -1,4 +1,8 @@
-const images: Record<string, ReturnType<typeof require>> = {
+import type { ImageProps } from "expo-image";
+
+type ActivityImageSource = NonNullable<ImageProps["source"]>;
+
+const images: Record<string, ActivityImageSource> = {
   room: require("@/assets/images/activities/room.jpg"),
   creativity: require("@/assets/images/activities/creativity.jpg"),
   nature: require("@/assets/images/activities/nature.jpg"),
@@ -11,6 +15,6 @@ const images: Record<string, ReturnType<typeof require>> = {
   games: require("@/assets/images/activities/games.jpg"),
 };
 
-export function getActivityImage(key: string): ReturnType<typeof require> {
+export function getActivityImage(key: string): ActivityImageSource {
   return images[key] ?? images.creativity;
 }
