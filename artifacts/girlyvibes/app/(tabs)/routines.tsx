@@ -28,11 +28,12 @@ function RoutineCard({
 }) {
   const colors = useColors();
   const { t, l } = useLanguage();
-  const { isStepCompleted, toggleRoutineStep, getRoutineCompletionPercent, completeRoutine } =
+  const { isStepCompleted, toggleRoutineStep, getRoutineCompletionPercent, completeRoutine, isRoutineCompleted } =
     useApp();
 
   const percent = getRoutineCompletionPercent(routine.id, routine.steps.length);
   const allDone = percent === 100;
+  const routineCompleted = isRoutineCompleted(routine.id);
 
   async function handleStep(stepId: string) {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -141,7 +142,7 @@ function RoutineCard({
             );
           })}
 
-          {allDone && (
+          {allDone && !routineCompleted && (
             <Pressable
               style={[styles.completeBtn, { backgroundColor: colors.primary }]}
               onPress={handleComplete}

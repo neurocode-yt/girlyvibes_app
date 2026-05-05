@@ -8,6 +8,7 @@ export const AR = {
     advice: "نصائح",
     boredom: "أنشطة",
     diary: "يومياتي",
+    profile: "الملف",
   },
   home: {
     greetingMorning: "صباح الخير ✦",
@@ -40,6 +41,10 @@ export const AR = {
     today: "اليوم",
     completed: "مكتمل",
     tasks: "مهام",
+    cancelProgressTitle: "إلغاء التقدم؟",
+    cancelProgressMessage: "هل أنتِ متأكدة أنكِ تريدين إلغاء التقدم؟ سيتم إعادة تعيين كل الأيام وستبدأ الخطة من اليوم 0.",
+    cancelProgressKeep: "لا",
+    cancelProgressConfirm: "نعم، إلغاء",
   },
   advice: {
     screenTitle: "مكتبة النصائح",
@@ -131,6 +136,7 @@ export const EN = {
     advice: "Advice",
     boredom: "Activities",
     diary: "Diary",
+    profile: "Profile",
   },
   home: {
     greetingMorning: "Good morning ✦",
@@ -163,6 +169,10 @@ export const EN = {
     today: "Day",
     completed: "done",
     tasks: "tasks",
+    cancelProgressTitle: "Cancel progress?",
+    cancelProgressMessage: "Are you sure you want to cancel the progress? It will reset all the days and start from day 0.",
+    cancelProgressKeep: "No",
+    cancelProgressConfirm: "Yes, cancel",
   },
   advice: {
     screenTitle: "Advice Library",

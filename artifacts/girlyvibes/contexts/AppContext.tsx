@@ -15,9 +15,15 @@ interface RoutineProgress {
   };
 }
 
+interface CompletedRoutines {
+  [routineId: string]: boolean;
+}
+
 interface GlowUpProgress {
   activePlanId: string | null;
+  activePlanIds?: string[];
   startDate: string | null;
+  planStartDates?: { [planId: string]: string };
   completedTasks: { [dayKey: string]: boolean };
 }
 
@@ -65,6 +71,7 @@ interface AppData {
   lastStreakDate: string | null;
   totalRoutinesCompleted: number;
   routineProgress: RoutineProgress;
+  completedRoutines?: CompletedRoutines;
   glowUpProgress: GlowUpProgress;
   detoxChallenge: DetoxChallenge;
   favoriteAdvice: string[];
@@ -86,11 +93,13 @@ interface AppContextType {
   isStepCompleted: (routineId: string, stepId: string) => boolean;
   getRoutineCompletionPercent: (routineId: string, totalSteps: number) => number;
   completeRoutine: (routineId: string) => Promise<void>;
+  isRoutineCompleted: (routineId: string) => boolean;
   startGlowUpPlan: (planId: string) => Promise<void>;
+  deactivateGlowUpPlan: (planId: string) => Promise<void>;
   toggleGlowUpTask: (planId: string, dayNum: number, taskId: string) => Promise<void>;
   isGlowUpTaskDone: (planId: string, dayNum: number, taskId: string) => boolean;
   getDayProgress: (planId: string, dayNum: number, taskIds: string[]) => number;
-  getCurrentDay: () => number;
+  getCurrentDay: (planId?: string) => number;
   startDetoxChallenge: (challengeId: string) => Promise<void>;
   checkInDetox: () => Promise<void>;
   isDetoxCheckedInToday: () => boolean;
@@ -104,9 +113,12 @@ const DEFAULT_DATA: AppData = {
   lastStreakDate: null,
   totalRoutinesCompleted: 0,
   routineProgress: {},
+  completedRoutines: {},
   glowUpProgress: {
     activePlanId: null,
+    activePlanIds: [],
     startDate: null,
+    planStartDates: {},
     completedTasks: {},
   },
   detoxChallenge: {
@@ -184,6 +196,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const completeRoutine = useCallback(
     async (routineId: string) => {
+      if (data.completedRoutines?.[routineId]) return;
+
       const today = new Date().toDateString();
       const isNewDay = data.lastStreakDate !== today;
       const wasYesterday =
@@ -201,23 +215,77 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         streak: newStreak,
         lastStreakDate: today,
         totalRoutinesCompleted: data.totalRoutinesCompleted + 1,
+        completedRoutines: {
+          ...(data.completedRoutines ?? {}),
+          [routineId]: true,
+        },
       });
     },
     [data, save]
   );
 
+  const isRoutineCompleted = useCallback(
+    (routineId: string) => data.completedRoutines?.[routineId] ?? false,
+    [data],
+  );
+
   const startGlowUpPlan = useCallback(
     async (planId: string) => {
+      const existingActiveIds =
+        data.glowUpProgress.activePlanIds ??
+        (data.glowUpProgress.activePlanId ? [data.glowUpProgress.activePlanId] : []);
+      const activePlanIds = existingActiveIds.includes(planId)
+        ? existingActiveIds
+        : [...existingActiveIds, planId];
+      const now = new Date().toISOString();
+
       await save({
         ...data,
         glowUpProgress: {
+          ...data.glowUpProgress,
           activePlanId: planId,
-          startDate: new Date().toISOString(),
-          completedTasks: {},
+          activePlanIds,
+          startDate: data.glowUpProgress.startDate ?? now,
+          planStartDates: {
+            ...(data.glowUpProgress.planStartDates ?? {}),
+            [planId]: data.glowUpProgress.planStartDates?.[planId] ?? now,
+          },
         },
       });
     },
     [data, save]
+  );
+
+  const deactivateGlowUpPlan = useCallback(
+    async (planId: string) => {
+      const existingActiveIds =
+        data.glowUpProgress.activePlanIds ??
+        (data.glowUpProgress.activePlanId ? [data.glowUpProgress.activePlanId] : []);
+      const activePlanIds = existingActiveIds.filter((id) => id !== planId);
+      const completedTasks = Object.fromEntries(
+        Object.entries(data.glowUpProgress.completedTasks).filter(
+          ([key]) => !key.startsWith(`${planId}_`),
+        ),
+      );
+      const planStartDates = { ...(data.glowUpProgress.planStartDates ?? {}) };
+      delete planStartDates[planId];
+
+      await save({
+        ...data,
+        glowUpProgress: {
+          ...data.glowUpProgress,
+          activePlanId:
+            data.glowUpProgress.activePlanId === planId
+              ? activePlanIds[activePlanIds.length - 1] ?? null
+              : data.glowUpProgress.activePlanId,
+          activePlanIds,
+          startDate: activePlanIds.length === 0 ? null : data.glowUpProgress.startDate,
+          planStartDates,
+          completedTasks,
+        },
+      });
+    },
+    [data, save],
   );
 
   const toggleGlowUpTask = useCallback(
@@ -258,9 +326,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [data]
   );
 
-  const getCurrentDay = useCallback(() => {
-    if (!data.glowUpProgress.startDate) return 1;
-    const start = new Date(data.glowUpProgress.startDate);
+  const getCurrentDay = useCallback((planId?: string) => {
+    const startDate = planId
+      ? data.glowUpProgress.planStartDates?.[planId] ?? data.glowUpProgress.startDate
+      : data.glowUpProgress.startDate;
+    if (!startDate) return 1;
+    const start = new Date(startDate);
     const diff = Math.floor((Date.now() - start.getTime()) / 86400000);
     return diff + 1;
   }, [data]);
@@ -378,7 +449,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         isStepCompleted,
         getRoutineCompletionPercent,
         completeRoutine,
+        isRoutineCompleted,
         startGlowUpPlan,
+        deactivateGlowUpPlan,
         toggleGlowUpTask,
         isGlowUpTaskDone,
         getDayProgress,

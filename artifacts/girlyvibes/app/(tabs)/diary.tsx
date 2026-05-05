@@ -563,11 +563,32 @@ const RICH_TEXT_COLORS = [
   "#00695C", "#546E7A",
 ];
 
-const BULLET_SYMBOLS = ["♡", "♥︎", "ꨄ︎", "𓆩❤︎𓆪", "ᯓ", "𖹭", "✈︎", "❥", "•͜•⃝", "🧚🏻‍♀️", "۶۟", "ৎ"];
+const BULLET_SYMBOLS = ["♡", "♥︎", "ꨄ︎", "𓆩❤︎𓆪", "ᯓ", "𖹭", "✈︎", "❥", "🧚🏻‍♀️", "۶۟", "ৎ"];
+const FAIRYTALE_BULLET = "🧚🏻‍♀️";
 
 let _bc = 0;
 function makeBlock(o?: Partial<RichBlock>): RichBlock {
   return { id: `b${Date.now()}${++_bc}`, text: "", type: "body", bold: false, italic: false, underline: false, color: "#222222", fontStyle: "sans", ...o };
+}
+
+function serializeNoteDraft(title: string, color: string, blocks: RichBlock[]) {
+  return JSON.stringify({
+    title: title.trim(),
+    color,
+    blocks: blocks.map((b) => ({
+      text: b.text,
+      type: b.type,
+      bold: b.bold,
+      italic: b.italic,
+      underline: b.underline,
+      color: b.color,
+      fontStyle: b.fontStyle,
+      audioUri: b.audioUri,
+      audioDurationMillis: b.audioDurationMillis,
+      bulletSymbol: b.bulletSymbol,
+      emojiScale: b.emojiScale,
+    })),
+  });
 }
 
 const NOTE_FONT_OPTIONS: Array<{
@@ -929,7 +950,10 @@ function RichBlockInput({
   const scale = block.emojiScale ?? 1;
   const effectiveFontSize = Math.round(sz.fontSize * scale);
   const effectiveLineHeight = Math.round(sz.lineHeight * scale);
-  const bulletSymbol = block.bulletSymbol ?? BULLET_SYMBOLS[0];
+  const bulletSymbol = BULLET_SYMBOLS.includes(block.bulletSymbol ?? "")
+    ? block.bulletSymbol!
+    : BULLET_SYMBOLS[0];
+  const isFairytaleBullet = bulletSymbol === FAIRYTALE_BULLET;
   const cycleBullet = () => {
     const index = BULLET_SYMBOLS.indexOf(bulletSymbol);
     onUpdateBlock(block.id, {
@@ -943,13 +967,23 @@ function RichBlockInput({
       {block.type === "bullet" && (
         <>
           <Pressable
-            style={richBlockStyles.bulletWrap}
+            style={[richBlockStyles.bulletWrap, { height: effectiveLineHeight }]}
             onPress={cycleBullet}
             onLongPress={() => setBulletPickerOpen(true)}
             delayLongPress={260}
             hitSlop={12}
           >
-            <Text style={richBlockStyles.bulletSymbol}>{bulletSymbol}</Text>
+            <Text
+              style={[
+                richBlockStyles.bulletSymbol,
+                {
+                  fontSize: isFairytaleBullet ? Math.round(effectiveFontSize * 1.25) : 21,
+                  lineHeight: effectiveLineHeight,
+                },
+              ]}
+            >
+              {bulletSymbol}
+            </Text>
           </Pressable>
           {bulletPickerOpen && (
             <View style={richBlockStyles.bulletPicker}>
@@ -982,7 +1016,7 @@ function RichBlockInput({
           fontStyle: block.italic ? "italic" : "normal",
           textDecorationLine: block.underline ? "underline" : "none",
           color: block.color,
-          paddingLeft: block.type === "bullet" ? 62 : 20,
+          paddingLeft: block.type === "bullet" ? 72 : 20,
           paddingRight: 20,
           paddingVertical: 6,
           minHeight: effectiveLineHeight + 12,
@@ -1014,7 +1048,7 @@ const richBlockStyles = StyleSheet.create({
     borderRadius: 14,
     marginHorizontal: 10,
     marginVertical: 1,
-    overflow: "hidden",
+    overflow: "visible",
     position: "relative",
   },
   wrapActive: {
@@ -1031,12 +1065,11 @@ const richBlockStyles = StyleSheet.create({
   },
   bulletWrap: {
     alignItems: "center",
-    height: 38,
     justifyContent: "center",
     left: 8,
     position: "absolute",
     top: 6,
-    width: 52,
+    width: 62,
     zIndex: 5,
   },
   bulletSymbol: {
@@ -1044,7 +1077,7 @@ const richBlockStyles = StyleSheet.create({
     fontSize: 21,
     lineHeight: 30,
     includeFontPadding: false,
-    minWidth: 46,
+    minWidth: 58,
     textAlign: "center",
     textShadowColor: "rgba(194,24,91,0.18)",
     textShadowOffset: { width: 0, height: 2 },
@@ -1181,6 +1214,28 @@ function FormattingToolbar({
 
   return (
     <View style={[tbStyles.container, { paddingBottom: Math.max(insets.bottom, 8) }]}>
+      {bulletPickerOpen && (
+        <View style={tbStyles.toolbarBulletPicker}>
+          {BULLET_SYMBOLS.map((symbol) => (
+            <Pressable
+              key={symbol}
+              style={[
+                tbStyles.toolbarBulletOption,
+                (b.bulletSymbol ?? BULLET_SYMBOLS[0]) === symbol && tbStyles.toolbarBulletOptionActive,
+              ]}
+              onPress={() => {
+                Haptics.selectionAsync();
+                onBulletSymbolChange(symbol);
+                setBulletPickerOpen(false);
+                onRefocus();
+              }}
+            >
+              <Text style={tbStyles.toolbarBulletText}>{symbol}</Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
+
       {/* Emoji size slider — shows when block contains emoji */}
       {hasEmoji && (
         <EmojiSizeSlider
@@ -1227,26 +1282,6 @@ function FormattingToolbar({
               {(b.bulletSymbol ?? BULLET_SYMBOLS[0])} List
             </Text>
           </Pressable>
-          {bulletPickerOpen && (
-            <View style={tbStyles.toolbarBulletPicker}>
-              {BULLET_SYMBOLS.map((symbol) => (
-                <Pressable
-                  key={symbol}
-                  style={[
-                    tbStyles.toolbarBulletOption,
-                    (b.bulletSymbol ?? BULLET_SYMBOLS[0]) === symbol && tbStyles.toolbarBulletOptionActive,
-                  ]}
-                  onPress={() => {
-                    onBulletSymbolChange(symbol);
-                    setBulletPickerOpen(false);
-                    onRefocus();
-                  }}
-                >
-                  <Text style={tbStyles.toolbarBulletText}>{symbol}</Text>
-                </Pressable>
-              ))}
-            </View>
-          )}
         </View>
         <View style={tbStyles.sep} />
         <Btn label="B" active={b.bold}      onPress={() => onUpdateBlock({ bold: !b.bold })}           extraTextStyle={{ fontFamily: "Inter_700Bold" }} />
@@ -1297,7 +1332,7 @@ function FormattingToolbar({
 }
 
 const tbStyles = StyleSheet.create({
-  container: { backgroundColor: "rgba(255,255,255,0.94)", borderTopWidth: 1, borderTopColor: "rgba(0,0,0,0.06)", shadowColor: "#000", shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 10 },
+  container: { backgroundColor: "rgba(255,255,255,0.94)", borderTopWidth: 1, borderTopColor: "rgba(0,0,0,0.06)", shadowColor: "#000", shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 10, overflow: "visible", position: "relative", zIndex: 20 },
   actionRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 10, height: 44, gap: 8 },
   row: { flexDirection: "row", alignItems: "center", paddingHorizontal: 10, height: 46, gap: 4 },
   colorRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 10, height: 44, gap: 8 },
@@ -1314,35 +1349,36 @@ const tbStyles = StyleSheet.create({
   listControlWrap: { position: "relative" },
   toolbarBulletPicker: {
     alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.98)",
-    borderColor: "rgba(194,24,91,0.16)",
-    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.66)",
+    borderColor: "rgba(194,24,91,0.18)",
+    borderRadius: 20,
     borderWidth: 1,
-    bottom: 42,
-    elevation: 10,
+    bottom: 96,
+    elevation: 18,
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 6,
-    left: -4,
-    maxWidth: 260,
-    padding: 7,
+    gap: 8,
+    left: 12,
+    maxWidth: 286,
+    padding: 10,
     position: "absolute",
     shadowColor: "#C2185B",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.14,
-    shadowRadius: 12,
-    zIndex: 50,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.18,
+    shadowRadius: 18,
+    zIndex: 100,
   },
   toolbarBulletOption: {
     alignItems: "center",
-    borderRadius: 14,
-    height: 36,
+    backgroundColor: "rgba(194,24,91,0.07)",
+    borderRadius: 16,
+    height: 40,
     justifyContent: "center",
-    minWidth: 38,
-    paddingHorizontal: 6,
+    minWidth: 42,
+    paddingHorizontal: 8,
   },
-  toolbarBulletOptionActive: { backgroundColor: "rgba(255,107,157,0.18)" },
-  toolbarBulletText: { color: "#C2185B", fontSize: 19, lineHeight: 26 },
+  toolbarBulletOptionActive: { backgroundColor: "rgba(255,107,157,0.24)", borderColor: "rgba(194,24,91,0.22)", borderWidth: 1 },
+  toolbarBulletText: { color: "#C2185B", fontSize: 20, lineHeight: 26, includeFontPadding: false, textAlign: "center" },
   fontBtn: {
     alignItems: "center",
     borderRadius: 10,
@@ -1382,21 +1418,26 @@ function NoteEditorModal({
   const [blocks, setBlocks] = useState<RichBlock[]>(() => [makeBlock()]);
   const [activeId, setActiveId] = useState("");
   const [noteColor, setNoteColor] = useState(NOTE_COLORS[0]);
+  const [savePromptVisible, setSavePromptVisible] = useState(false);
   const blockRefs = useRef<{ [id: string]: TextInput | null }>({});
   const titleRef = useRef<TextInput | null>(null);
+  const initialDraftRef = useRef("");
 
   useEffect(() => {
     if (!visible) return;
     setTitle(initialNote?.title ?? "");
     setNoteColor(initialNote?.color ?? NOTE_COLORS[0]);
     if (initialNote?.richContent?.length) {
-      setBlocks(initialNote.richContent);
-      setActiveId(initialNote.richContent[0].id);
+      const nb = initialNote.richContent;
+      setBlocks(nb);
+      setActiveId(nb[0].id);
+      initialDraftRef.current = serializeNoteDraft(initialNote?.title ?? "", initialNote?.color ?? NOTE_COLORS[0], nb);
     } else {
       const lines = (initialNote?.text ?? "").split("\n").filter(Boolean);
       const nb = lines.length ? lines.map((l) => makeBlock({ text: l })) : [makeBlock()];
       setBlocks(nb);
       setActiveId(nb[0].id);
+      initialDraftRef.current = serializeNoteDraft(initialNote?.title ?? "", initialNote?.color ?? NOTE_COLORS[0], nb);
     }
   }, [visible, initialNote?.id]);
 
@@ -1424,10 +1465,16 @@ function NoteEditorModal({
 
   const handleEnter = (id: string, after: string) => {
     const src = blocks.find((b) => b.id === id);
+    const isEmptyBullet = src?.type === "bullet" && !src.text.trim() && !after.trim();
+    const nextType =
+      isEmptyBullet || src?.type === "h1" || src?.type === "h2" || src?.type === "audio"
+        ? "body"
+        : src?.type;
     const nb = makeBlock({
-      type: src?.type === "h1" || src?.type === "h2" || src?.type === "audio" ? "body" : src?.type,
+      type: nextType,
       color: src?.color,
       fontStyle: src?.fontStyle,
+      bulletSymbol: nextType === "bullet" ? src?.bulletSymbol : undefined,
       text: after,
     });
     setBlocks((prev) => {
@@ -1509,12 +1556,22 @@ function NoteEditorModal({
     onSave(text, noteColor, normalizedBlocks, title.trim());
   };
 
+  const handleCloseRequest = () => {
+    const isDirty = serializeNoteDraft(title, noteColor, blocks) !== initialDraftRef.current;
+    if (!hasContent || !isDirty) {
+      onClose();
+      return;
+    }
+
+    setSavePromptVisible(true);
+  };
+
   return (
-    <Modal visible={visible} animationType="slide" statusBarTranslucent onRequestClose={onClose}>
+    <Modal visible={visible} animationType="slide" statusBarTranslucent onRequestClose={handleCloseRequest}>
       <View style={[editorStyles.root, { backgroundColor: noteColor }]}>
         {/* Top bar */}
         <View style={[editorStyles.topBar, { paddingTop: insets.top + 12, flexDirection: isRTL ? "row-reverse" : "row" }]}>
-          <Pressable style={editorStyles.topBtn} onPress={onClose} hitSlop={10}>
+          <Pressable style={editorStyles.topBtn} onPress={handleCloseRequest} hitSlop={10}>
             <Icon name="arrow-left" size={22} color="#333" />
           </Pressable>
           <Text style={editorStyles.topTitle}>
@@ -1585,6 +1642,46 @@ function NoteEditorModal({
             canDelete={blocks.length > 1}
           />
         </KeyboardAvoidingView>
+
+        {savePromptVisible && (
+          <View style={editorStyles.promptOverlay}>
+            <Pressable
+              style={StyleSheet.absoluteFill}
+              onPress={() => setSavePromptVisible(false)}
+            />
+            <View style={[editorStyles.promptCard, { backgroundColor: noteColor }]}>
+              <View style={editorStyles.promptIcon}>
+                <Icon name="content-save-heart-outline" size={24} color="#C2185B" />
+              </View>
+              <Text style={[editorStyles.promptTitle, { textAlign: isRTL ? "right" : "left" }]}>
+                {l("حفظ الملاحظة؟", "Save note?")}
+              </Text>
+              <Text style={[editorStyles.promptText, { textAlign: isRTL ? "right" : "left" }]}>
+                {l("لديك تغييرات غير محفوظة.", "You have unsaved changes.")}
+              </Text>
+              <View style={[editorStyles.promptActions, { flexDirection: isRTL ? "row-reverse" : "row" }]}>
+                <Pressable
+                  style={editorStyles.promptNoBtn}
+                  onPress={() => {
+                    setSavePromptVisible(false);
+                    onClose();
+                  }}
+                >
+                  <Text style={editorStyles.promptNoText}>{l("لا", "No")}</Text>
+                </Pressable>
+                <Pressable
+                  style={editorStyles.promptSaveBtn}
+                  onPress={() => {
+                    setSavePromptVisible(false);
+                    handleSave();
+                  }}
+                >
+                  <Text style={editorStyles.promptSaveText}>{l("حفظ", "Save")}</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        )}
       </View>
     </Modal>
   );
@@ -1597,6 +1694,58 @@ const editorStyles = StyleSheet.create({
   topTitle: { fontSize: 16, fontFamily: "Inter_600SemiBold", color: "#333", flex: 1, textAlign: "center" },
   saveBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
   saveBtnTxt: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  promptOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    backgroundColor: "rgba(45, 20, 34, 0.26)",
+    justifyContent: "center",
+    padding: 24,
+    zIndex: 50,
+  },
+  promptCard: {
+    borderColor: "rgba(194,24,91,0.16)",
+    borderRadius: 24,
+    borderWidth: 1,
+    maxWidth: 340,
+    padding: 20,
+    shadowColor: "#C2185B",
+    shadowOffset: { width: 0, height: 14 },
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
+    width: "100%",
+    elevation: 18,
+  },
+  promptIcon: {
+    alignItems: "center",
+    alignSelf: "flex-start",
+    backgroundColor: "rgba(255,255,255,0.56)",
+    borderRadius: 18,
+    height: 42,
+    justifyContent: "center",
+    marginBottom: 14,
+    width: 42,
+  },
+  promptTitle: { color: "#2F2028", fontFamily: "Inter_700Bold", fontSize: 20, lineHeight: 26 },
+  promptText: { color: "rgba(47,32,40,0.72)", fontFamily: "Inter_400Regular", fontSize: 14, lineHeight: 21, marginTop: 6 },
+  promptActions: { gap: 10, justifyContent: "flex-end", marginTop: 18 },
+  promptNoBtn: {
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.46)",
+    borderRadius: 16,
+    minWidth: 86,
+    paddingHorizontal: 18,
+    paddingVertical: 11,
+  },
+  promptSaveBtn: {
+    alignItems: "center",
+    backgroundColor: "#C2185B",
+    borderRadius: 16,
+    minWidth: 96,
+    paddingHorizontal: 18,
+    paddingVertical: 11,
+  },
+  promptNoText: { color: "#6B4A58", fontFamily: "Inter_600SemiBold", fontSize: 14 },
+  promptSaveText: { color: "#fff", fontFamily: "Inter_700Bold", fontSize: 14 },
   titleInput: {
     color: "#333",
     fontFamily: "Inter_700Bold",

@@ -13,6 +13,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { HoldEmojiBurst } from "@/components/HoldEmojiBurst";
 import { AppProvider } from "@/contexts/AppContext";
 import { getStoredLang, LanguageProvider } from "@/contexts/LanguageContext";
 import { Lang } from "@/constants/i18n";
@@ -78,7 +79,9 @@ export default function RootLayout() {
           <GestureHandlerRootView style={{ flex: 1 }}>
             <LanguageProvider initialLang={lang ?? "ar"}>
               <AppProvider>
-                <RootLayoutNav />
+                <HoldEmojiBurst>
+                  <RootLayoutNav />
+                </HoldEmojiBurst>
               </AppProvider>
             </LanguageProvider>
           </GestureHandlerRootView>

@@ -10,6 +10,7 @@ out-tsc
 
 # dependencies
 node_modules
+/.pnpm-store
 
 # IDEs and editors
 /.idea
@@ -36,6 +37,8 @@ npm-debug.log
 yarn-error.log
 testem.log
 /typings
+*.zip
+zipFile.zip
 
 # System Files
 .DS_Store
@@ -47,3 +50,26 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+.replit
+.replitignore
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+
+# Android / Gradle
+.gradle-user-home/
+.gradle/
+build/
+app/build/
+local.properties
+*.apk
+*.aab
+
+# Internal tools/agents
+.agents/
+.config/
