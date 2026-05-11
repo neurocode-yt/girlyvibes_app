@@ -79,6 +79,7 @@ interface AppData {
   profilePhoto: string | null;
   diaryEntries: { [dateKey: string]: DiaryEntry };
   diaryNotes: DiaryNote[];
+  lastRoutineResetDate?: string;
 }
 
 interface AppContextType {
@@ -142,10 +143,31 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     AsyncStorage.getItem(STORAGE_KEY).then((raw) => {
       if (raw) {
         try {
-          setData(JSON.parse(raw));
+          const parsed = JSON.parse(raw);
+          const today = new Date().toDateString();
+          let needsSave = false;
+
+          // Daily reset for routines
+          if (parsed.lastRoutineResetDate !== today) {
+            parsed.routineProgress = {};
+            parsed.completedRoutines = {};
+            parsed.lastRoutineResetDate = today;
+            needsSave = true;
+          }
+
+          setData(parsed);
+          
+          if (needsSave) {
+            AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+          }
         } catch {
           // ignore
         }
+      } else {
+        // First launch, set today as reset date
+        const initial = { ...DEFAULT_DATA, lastRoutineResetDate: new Date().toDateString() };
+        setData(initial);
+        AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(initial));
       }
     });
   }, []);
@@ -164,11 +186,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const toggleRoutineStep = useCallback(
     async (routineId: string, stepId: string) => {
-      const prev = data.routineProgress[routineId] ?? {};
+      const today = new Date().toDateString();
+      let currentData = data;
+
+      if (currentData.lastRoutineResetDate !== today) {
+        currentData = {
+          ...currentData,
+          routineProgress: {},
+          completedRoutines: {},
+          lastRoutineResetDate: today,
+        };
+      }
+
+      const prev = currentData.routineProgress[routineId] ?? {};
       const updated: AppData = {
-        ...data,
+        ...currentData,
         routineProgress: {
-          ...data.routineProgress,
+          ...currentData.routineProgress,
           [routineId]: { ...prev, [stepId]: !prev[stepId] },
         },
       };
@@ -196,27 +230,38 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const completeRoutine = useCallback(
     async (routineId: string) => {
-      if (data.completedRoutines?.[routineId]) return;
-
       const today = new Date().toDateString();
-      const isNewDay = data.lastStreakDate !== today;
+      let currentData = data;
+
+      if (currentData.lastRoutineResetDate !== today) {
+        currentData = {
+          ...currentData,
+          routineProgress: {},
+          completedRoutines: {},
+          lastRoutineResetDate: today,
+        };
+      }
+
+      if (currentData.completedRoutines?.[routineId]) return;
+
+      const isNewDay = currentData.lastStreakDate !== today;
       const wasYesterday =
-        data.lastStreakDate ===
+        currentData.lastStreakDate ===
         new Date(Date.now() - 86400000).toDateString();
 
       const newStreak = isNewDay
-        ? wasYesterday || data.streak === 0
-          ? data.streak + 1
+        ? wasYesterday || currentData.streak === 0
+          ? currentData.streak + 1
           : 1
-        : data.streak;
+        : currentData.streak;
 
       await save({
-        ...data,
+        ...currentData,
         streak: newStreak,
         lastStreakDate: today,
-        totalRoutinesCompleted: data.totalRoutinesCompleted + 1,
+        totalRoutinesCompleted: currentData.totalRoutinesCompleted + 1,
         completedRoutines: {
-          ...(data.completedRoutines ?? {}),
+          ...(currentData.completedRoutines ?? {}),
           [routineId]: true,
         },
       });

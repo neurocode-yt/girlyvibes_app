@@ -50,6 +50,10 @@ const CARD_COLORS = [
 
 function todayKey(): string {
   const d = new Date();
+  return dateToKey(d);
+}
+
+function dateToKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
@@ -65,6 +69,30 @@ function formatDisplayDate(key: string, isRTL: boolean): string {
     day: "numeric",
     month: "long",
   });
+}
+
+function formatCompactDate(key: string, isRTL: boolean): string {
+  const d = dateKeyToDate(key);
+  return d.toLocaleDateString(isRTL ? "ar-SA" : "en-US", {
+    day: "numeric",
+    month: "short",
+  });
+}
+
+function pastDateKeys(count: number): string[] {
+  const today = dateKeyToDate(todayKey());
+  return Array.from({ length: count }, (_, i) => {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i - 1);
+    return dateToKey(d);
+  });
+}
+
+function isDateKeyPastOrToday(key: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(key)) return false;
+  const d = dateKeyToDate(key);
+  if (Number.isNaN(d.getTime())) return false;
+  return dateToKey(d) === key && key <= todayKey();
 }
 
 function getMoodByKey(key: string) {
@@ -1951,25 +1979,304 @@ const noteCardStyles = StyleSheet.create({
 
 // ─── Notes section ────────────────────────────────────────────────────────────
 
+function AllNotesModal({
+  visible,
+  notes,
+  entries,
+  onAddNote,
+  onClose,
+  onDeleteEntry,
+  onDeleteNote,
+  onEditNote,
+  onSaveEntry,
+}: {
+  visible: boolean;
+  notes: DiaryNote[];
+  entries: { [dateKey: string]: DiaryEntry };
+  onAddNote: (dateKey: string) => void;
+  onClose: () => void;
+  onDeleteEntry: (dateKey: string) => void;
+  onDeleteNote: (noteId: string) => void;
+  onEditNote: (note: DiaryNote) => void;
+  onSaveEntry: (entry: DiaryEntry) => void;
+}) {
+  const colors = useColors();
+  const insets = useSafeAreaInsets();
+  const { t, isRTL, l } = useLanguage();
+
+  const notesByDate = useMemo(() => {
+    return notes.reduce<Record<string, DiaryNote[]>>((acc, note) => {
+      acc[note.date] = [...(acc[note.date] ?? []), note];
+      return acc;
+    }, {});
+  }, [notes]);
+
+  const dateOptions = useMemo(() => {
+    const keys = [...Object.keys(notesByDate), ...Object.keys(entries), ...pastDateKeys(14)];
+    return Array.from(new Set(keys))
+      .filter(isDateKeyPastOrToday)
+      .sort((a, b) => (a < b ? 1 : -1));
+  }, [entries, notesByDate]);
+
+  const [selectedDate, setSelectedDate] = useState(dateOptions[0] ?? todayKey());
+  const [customDate, setCustomDate] = useState("");
+  const [dateError, setDateError] = useState("");
+  const selectedEntry = entries[selectedDate];
+  const selectedNotes = (notesByDate[selectedDate] ?? []).sort((a, b) => b.createdAt - a.createdAt);
+  const [selectedMood, setSelectedMood] = useState<string | null>(selectedEntry?.mood ?? null);
+  const [memoryText, setMemoryText] = useState(selectedEntry?.note ?? "");
+  const [cardColor, setCardColor] = useState(selectedEntry?.cardColor ?? CARD_COLORS[0]);
+
+  useEffect(() => {
+    if (visible) {
+      setSelectedDate((current) => (dateOptions.includes(current) ? current : dateOptions[0] ?? todayKey()));
+      setDateError("");
+    }
+  }, [dateOptions, visible]);
+
+  useEffect(() => {
+    setSelectedMood(selectedEntry?.mood ?? null);
+    setMemoryText(selectedEntry?.note ?? "");
+    setCardColor(selectedEntry?.cardColor ?? CARD_COLORS[0]);
+  }, [selectedDate, selectedEntry?.mood, selectedEntry?.note, selectedEntry?.cardColor]);
+
+  const handleSaveEntry = () => {
+    if (!selectedMood) return;
+    const mood = getMoodByKey(selectedMood);
+    onSaveEntry({
+      id: selectedDate,
+      mood: selectedMood,
+      moodEmoji: mood.emoji,
+      note: memoryText.trim(),
+      cardColor,
+    });
+  };
+
+  const handleOpenCustomDate = () => {
+    const next = customDate.trim();
+    if (!isDateKeyPastOrToday(next)) {
+      setDateError(l("اكتبي التاريخ بصيغة YYYY-MM-DD ولا يكون في المستقبل.", "Use YYYY-MM-DD, and choose today or a past date."));
+      return;
+    }
+    setDateError("");
+    setSelectedDate(next);
+    setCustomDate("");
+  };
+
+  return (
+    <Modal visible={visible} animationType="slide" statusBarTranslucent onRequestClose={onClose}>
+      <View style={[allNotesStyles.root, { backgroundColor: colors.background, paddingTop: insets.top + 12 }]}>
+        <LinearGradient colors={["#FFE4EC", colors.background]} style={StyleSheet.absoluteFill} />
+        <View style={[allNotesStyles.topBar, { flexDirection: isRTL ? "row-reverse" : "row" }]}>
+          <Pressable style={allNotesStyles.closeBtn} onPress={onClose} hitSlop={10}>
+            <Icon name="arrow-left" size={22} color="#6B3C4C" />
+          </Pressable>
+          <View style={{ flex: 1 }}>
+            <Text style={[allNotesStyles.title, { color: colors.foreground, textAlign: isRTL ? "right" : "left" }]}>
+              {l("كل الملاحظات", "All notes")}
+            </Text>
+            <Text style={[allNotesStyles.subtitle, { color: colors.mutedForeground, textAlign: isRTL ? "right" : "left" }]}>
+              {l("اختاري تاريخاً لإضافة ملاحظة أو مزاج.", "Choose a date to add notes or mood.")}
+            </Text>
+          </View>
+        </View>
+
+        <View style={[allNotesStyles.jumpCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[allNotesStyles.jumpLabel, { color: colors.foreground, textAlign: isRTL ? "right" : "left" }]}>
+            {l("افتحي أي يوم سابق", "Open any past day")}
+          </Text>
+          <View style={[allNotesStyles.jumpRow, { flexDirection: isRTL ? "row-reverse" : "row" }]}>
+            <TextInput
+              value={customDate}
+              onChangeText={setCustomDate}
+              placeholder="YYYY-MM-DD"
+              placeholderTextColor={colors.mutedForeground}
+              autoCapitalize="none"
+              style={[allNotesStyles.jumpInput, { color: colors.foreground, borderColor: colors.border, textAlign: isRTL ? "right" : "left" }]}
+            />
+            <Pressable style={[allNotesStyles.jumpBtn, { backgroundColor: colors.primary }]} onPress={handleOpenCustomDate}>
+              <Text style={allNotesStyles.jumpBtnText}>{l("افتحي", "Open")}</Text>
+            </Pressable>
+          </View>
+          {!!dateError && (
+            <Text style={[allNotesStyles.errorText, { textAlign: isRTL ? "right" : "left" }]}>{dateError}</Text>
+          )}
+        </View>
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={[allNotesStyles.dateRail, { flexDirection: isRTL ? "row-reverse" : "row" }]}
+        >
+          {dateOptions.map((dateKey) => {
+            const isSelected = dateKey === selectedDate;
+            const count = notesByDate[dateKey]?.length ?? 0;
+            const moodEmoji = entries[dateKey]?.moodEmoji;
+            return (
+              <Pressable
+                key={dateKey}
+                style={[
+                  allNotesStyles.dateChip,
+                  {
+                    backgroundColor: isSelected ? colors.primary : colors.card,
+                    borderColor: isSelected ? colors.primary : colors.border,
+                  },
+                ]}
+                onPress={() => setSelectedDate(dateKey)}
+              >
+                <Text style={[allNotesStyles.dateChipText, { color: isSelected ? "#fff" : colors.foreground }]}>
+                  {moodEmoji ? `${moodEmoji} ` : ""}{formatCompactDate(dateKey, isRTL)}
+                </Text>
+                <Text style={[allNotesStyles.dateChipSub, { color: isSelected ? "#fff" : colors.mutedForeground }]}>
+                  {count} {l("ملاحظة", count === 1 ? "note" : "notes")}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 28 }}>
+          <View style={[allNotesStyles.dayCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={[allNotesStyles.dayHeader, { flexDirection: isRTL ? "row-reverse" : "row" }]}>
+              <View style={{ flex: 1 }}>
+                <Text style={[allNotesStyles.dayTitle, { color: colors.foreground, textAlign: isRTL ? "right" : "left" }]}>
+                  {formatDisplayDate(selectedDate, isRTL)}
+                </Text>
+                <Text style={[allNotesStyles.daySub, { color: colors.mutedForeground, textAlign: isRTL ? "right" : "left" }]}>
+                  {selectedEntry ? l("مزاج محفوظ لهذا اليوم", "Mood saved for this day") : l("أضيفي مزاج اليوم إذا أردتِ", "Add this day's mood if you want")}
+                </Text>
+              </View>
+              <Pressable style={[allNotesStyles.addNoteBtn, { backgroundColor: colors.primary + "18" }]} onPress={() => onAddNote(selectedDate)}>
+                <Icon name="plus" size={15} color={colors.primary} />
+                <Text style={[allNotesStyles.addNoteText, { color: colors.primary }]}>{t.diary.addNote}</Text>
+              </Pressable>
+            </View>
+
+            <Text style={[todayStyles.sectionLabel, { color: colors.foreground, textAlign: isRTL ? "right" : "left" }]}>
+              {t.diary.moodLabel}
+            </Text>
+            <MoodPicker selected={selectedMood} onSelect={setSelectedMood} />
+            <TextInput
+              style={[todayStyles.input, {
+                backgroundColor: colors.background,
+                color: colors.foreground,
+                borderColor: colors.border,
+                textAlign: isRTL ? "right" : "left",
+              }]}
+              placeholder={t.diary.notePlaceholder}
+              placeholderTextColor={colors.mutedForeground}
+              multiline
+              numberOfLines={3}
+              value={memoryText}
+              onChangeText={setMemoryText}
+            />
+            <Text style={[todayStyles.sectionLabel, { color: colors.foreground, textAlign: isRTL ? "right" : "left", marginBottom: 10 }]}>
+              {t.diary.colorPicker}
+            </Text>
+            <ColorPicker selected={cardColor} onSelect={setCardColor} />
+            <View style={[allNotesStyles.memoryActions, { flexDirection: isRTL ? "row-reverse" : "row" }]}>
+              {!!selectedEntry && (
+                <Pressable style={[allNotesStyles.deleteMemoryBtn, { borderColor: colors.border }]} onPress={() => onDeleteEntry(selectedDate)}>
+                  <Icon name="trash-can-outline" size={15} color="#E05" />
+                </Pressable>
+              )}
+              <Pressable
+                style={[allNotesStyles.saveMemoryBtn, { backgroundColor: selectedMood ? colors.primary : colors.border }]}
+                onPress={handleSaveEntry}
+                disabled={!selectedMood}
+              >
+                <Icon name="check-circle-outline" size={18} color={selectedMood ? "#fff" : colors.mutedForeground} />
+                <Text style={[allNotesStyles.saveMemoryText, { color: selectedMood ? "#fff" : colors.mutedForeground }]}>
+                  {t.diary.saveEntry}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+
+          <View style={allNotesStyles.notesList}>
+            <Text style={[allNotesStyles.notesListTitle, { color: colors.foreground, textAlign: isRTL ? "right" : "left" }]}>
+              {l("ملاحظات هذا اليوم", "Notes from this day")}
+            </Text>
+            {selectedNotes.map((note) => (
+              <NoteCard
+                key={note.id}
+                note={note}
+                onPress={() => onEditNote(note)}
+                onDelete={() => onDeleteNote(note.id)}
+              />
+            ))}
+            {selectedNotes.length === 0 && (
+              <Pressable style={[allNotesStyles.emptyDay, { borderColor: colors.border }]} onPress={() => onAddNote(selectedDate)}>
+                <Icon name="notebook-outline" size={22} color={colors.primary} />
+                <Text style={[allNotesStyles.emptyDayText, { color: colors.mutedForeground }]}>
+                  {l("لا توجد ملاحظات لهذا اليوم. اضغطي لإضافة واحدة.", "No notes for this day. Tap to add one.")}
+                </Text>
+              </Pressable>
+            )}
+          </View>
+        </ScrollView>
+      </View>
+    </Modal>
+  );
+}
+
+const allNotesStyles = StyleSheet.create({
+  root: { flex: 1 },
+  topBar: { alignItems: "center", gap: 12, paddingHorizontal: 16, paddingBottom: 12 },
+  closeBtn: { alignItems: "center", backgroundColor: "rgba(255,255,255,0.72)", borderRadius: 20, height: 40, justifyContent: "center", width: 40 },
+  title: { fontFamily: "Inter_700Bold", fontSize: 24, lineHeight: 30 },
+  subtitle: { fontFamily: "Inter_400Regular", fontSize: 13, lineHeight: 19, marginTop: 2 },
+  jumpCard: { borderRadius: 20, borderWidth: 1, marginHorizontal: 16, marginTop: 4, padding: 12 },
+  jumpLabel: { fontFamily: "Inter_600SemiBold", fontSize: 13, marginBottom: 8 },
+  jumpRow: { alignItems: "center", gap: 8 },
+  jumpInput: { borderRadius: 14, borderWidth: 1, flex: 1, fontFamily: "Inter_500Medium", fontSize: 14, paddingHorizontal: 12, paddingVertical: 10 },
+  jumpBtn: { borderRadius: 14, paddingHorizontal: 16, paddingVertical: 11 },
+  jumpBtnText: { color: "#fff", fontFamily: "Inter_700Bold", fontSize: 13 },
+  errorText: { color: "#C2185B", fontFamily: "Inter_500Medium", fontSize: 12, marginTop: 8 },
+  dateRail: { gap: 9, paddingHorizontal: 16, paddingVertical: 14 },
+  dateChip: { borderRadius: 18, borderWidth: 1, minWidth: 94, paddingHorizontal: 12, paddingVertical: 10 },
+  dateChipText: { fontFamily: "Inter_700Bold", fontSize: 13 },
+  dateChipSub: { fontFamily: "Inter_500Medium", fontSize: 11, marginTop: 3 },
+  dayCard: { borderRadius: 24, borderWidth: 1, marginHorizontal: 16, padding: 16 },
+  dayHeader: { alignItems: "center", gap: 12, marginBottom: 14 },
+  dayTitle: { fontFamily: "Inter_700Bold", fontSize: 18 },
+  daySub: { fontFamily: "Inter_400Regular", fontSize: 12, lineHeight: 18, marginTop: 2 },
+  addNoteBtn: { alignItems: "center", borderRadius: 18, flexDirection: "row", gap: 5, paddingHorizontal: 11, paddingVertical: 8 },
+  addNoteText: { fontFamily: "Inter_600SemiBold", fontSize: 12 },
+  memoryActions: { alignItems: "center", gap: 10 },
+  deleteMemoryBtn: { alignItems: "center", borderRadius: 14, borderWidth: 1, height: 46, justifyContent: "center", width: 46 },
+  saveMemoryBtn: { alignItems: "center", borderRadius: 14, flex: 1, flexDirection: "row", gap: 8, justifyContent: "center", padding: 14 },
+  saveMemoryText: { fontFamily: "Inter_700Bold", fontSize: 15 },
+  notesList: { marginHorizontal: 16, marginTop: 18 },
+  notesListTitle: { fontFamily: "Inter_600SemiBold", fontSize: 17, marginBottom: 10 },
+  emptyDay: { alignItems: "center", borderRadius: 20, borderStyle: "dashed", borderWidth: 1, gap: 8, padding: 22 },
+  emptyDayText: { fontFamily: "Inter_400Regular", fontSize: 14, lineHeight: 21, textAlign: "center" },
+});
+
 function NotesSection() {
   const colors = useColors();
-  const { t, isRTL } = useLanguage();
-  const { data, saveNote, deleteNote, updateNote } = useApp();
+  const { t, isRTL, l } = useLanguage();
+  const { data, saveDiaryEntry, deleteDiaryEntry, saveNote, deleteNote, updateNote } = useApp();
   const [modalVisible, setModalVisible] = useState(false);
+  const [allNotesVisible, setAllNotesVisible] = useState(false);
   const [editingNote, setEditingNote] = useState<DiaryNote | null>(null);
+  const [draftDate, setDraftDate] = useState(todayKey());
   const todayK = todayKey();
 
   const allNotes = [...(data.diaryNotes ?? [])].sort((a, b) => b.createdAt - a.createdAt);
   const todayNotes = allNotes.filter((n) => n.date === todayK);
-  const pastNotes = allNotes.filter((n) => n.date !== todayK);
 
-  const openNew = () => {
+  const openNew = (dateKey = todayK) => {
+    setDraftDate(dateKey);
     setEditingNote(null);
+    setAllNotesVisible(false);
     setModalVisible(true);
   };
 
   const openEdit = (note: DiaryNote) => {
+    setDraftDate(note.date);
     setEditingNote(note);
+    setAllNotesVisible(false);
     setModalVisible(true);
   };
 
@@ -1978,8 +2285,8 @@ function NotesSection() {
       await updateNote(editingNote.id, text, color, richContent, title);
     } else {
       await saveNote({
-        id: `${todayK}-${Date.now()}`,
-        date: todayK,
+        id: `${draftDate}-${Date.now()}`,
+        date: draftDate,
         text,
         richContent,
         color,
@@ -1990,11 +2297,13 @@ function NotesSection() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setModalVisible(false);
     setEditingNote(null);
+    setDraftDate(todayK);
   };
 
   const handleClose = () => {
     setModalVisible(false);
     setEditingNote(null);
+    setDraftDate(todayK);
   };
 
   const handleDelete = (noteId: string) => {
@@ -2002,6 +2311,22 @@ function NotesSection() {
     Alert.alert(t.diary.deleteConfirm, "", [
       { text: t.diary.cancel, style: "cancel" },
       { text: t.diary.deleteEntry, style: "destructive", onPress: () => deleteNote(noteId) },
+    ]);
+  };
+
+  const handleSaveEntry = async (entry: DiaryEntry) => {
+    await saveDiaryEntry(entry);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  };
+
+  const handleDeleteEntry = (dateKey: string) => {
+    if (Platform.OS === "web") {
+      deleteDiaryEntry(dateKey);
+      return;
+    }
+    Alert.alert(t.diary.deleteConfirm, "", [
+      { text: t.diary.cancel, style: "cancel" },
+      { text: t.diary.deleteEntry, style: "destructive", onPress: () => deleteDiaryEntry(dateKey) },
     ]);
   };
 
@@ -2013,6 +2338,17 @@ function NotesSection() {
         onSave={handleSave}
         onClose={handleClose}
       />
+      <AllNotesModal
+        visible={allNotesVisible}
+        notes={allNotes}
+        entries={data.diaryEntries ?? {}}
+        onAddNote={openNew}
+        onClose={() => setAllNotesVisible(false)}
+        onDeleteEntry={handleDeleteEntry}
+        onDeleteNote={handleDelete}
+        onEditNote={openEdit}
+        onSaveEntry={handleSaveEntry}
+      />
 
       <View style={[notesSectionStyles.header, { flexDirection: isRTL ? "row-reverse" : "row" }]}>
         <Text style={[notesSectionStyles.title, { color: colors.foreground }]}>
@@ -2020,7 +2356,7 @@ function NotesSection() {
         </Text>
         <Pressable
           style={[notesSectionStyles.addBtn, { backgroundColor: colors.primary + "18" }]}
-          onPress={openNew}
+          onPress={() => openNew()}
         >
           <Icon name="plus" size={15} color={colors.primary} />
           <Text style={[notesSectionStyles.addBtnText, { color: colors.primary }]}>
@@ -2030,6 +2366,24 @@ function NotesSection() {
       </View>
 
       <View style={{ marginHorizontal: 16 }}>
+        <Pressable
+          style={[notesSectionStyles.viewAllBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+          onPress={() => setAllNotesVisible(true)}
+        >
+          <View style={[notesSectionStyles.viewAllIcon, { backgroundColor: colors.primary + "18" }]}>
+            <Icon name="notebook-outline" size={18} color={colors.primary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[notesSectionStyles.viewAllTitle, { color: colors.foreground, textAlign: isRTL ? "right" : "left" }]}>
+              {l("عرض كل الملاحظات", "View all notes")}
+            </Text>
+            <Text style={[notesSectionStyles.viewAllSub, { color: colors.mutedForeground, textAlign: isRTL ? "right" : "left" }]}>
+              {l("افتحي الأيام السابقة وأضيفي ملاحظات أو مزاج.", "Open past days and add notes or mood.")}
+            </Text>
+          </View>
+          <Icon name="arrow-right" size={18} color={colors.primary} />
+        </Pressable>
+
         {todayNotes.map((note) => (
           <NoteCard
             key={note.id}
@@ -2039,32 +2393,10 @@ function NotesSection() {
           />
         ))}
 
-        {pastNotes.length > 0 && (
-          <View>
-            {pastNotes.map((note) => (
-              <View key={note.id}>
-                <Text
-                  style={[
-                    notesSectionStyles.pastDateLabel,
-                    { color: colors.mutedForeground, textAlign: isRTL ? "right" : "left" },
-                  ]}
-                >
-                  {formatDisplayDate(note.date, isRTL)}
-                </Text>
-                <NoteCard
-                  note={note}
-                  onPress={() => openEdit(note)}
-                  onDelete={() => handleDelete(note.id)}
-                />
-              </View>
-            ))}
-          </View>
-        )}
-
-        {todayNotes.length === 0 && pastNotes.length === 0 && (
-          <Pressable style={notesSectionStyles.emptyRow} onPress={openNew}>
+        {todayNotes.length === 0 && (
+          <Pressable style={notesSectionStyles.emptyRow} onPress={() => openNew()}>
             <Text style={[notesSectionStyles.emptyText, { color: colors.mutedForeground }]}>
-              {t.diary.noNotes}
+              {l("لا توجد ملاحظات لليوم. أضيفي واحدة أو افتحي كل الملاحظات.", "No notes for today. Add one or open all notes.")}
             </Text>
           </Pressable>
         )}
@@ -2090,6 +2422,24 @@ const notesSectionStyles = StyleSheet.create({
     borderRadius: 20,
   },
   addBtnText: { fontSize: 13, fontFamily: "Inter_500Medium" },
+  viewAllBtn: {
+    alignItems: "center",
+    borderRadius: 20,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 12,
+    marginBottom: 14,
+    padding: 14,
+  },
+  viewAllIcon: {
+    alignItems: "center",
+    borderRadius: 16,
+    height: 38,
+    justifyContent: "center",
+    width: 38,
+  },
+  viewAllTitle: { fontSize: 15, fontFamily: "Inter_700Bold" },
+  viewAllSub: { fontSize: 12, fontFamily: "Inter_400Regular", lineHeight: 18, marginTop: 2 },
   pastDateLabel: { fontSize: 11, fontFamily: "Inter_400Regular", marginBottom: 5, marginTop: 10 },
   emptyRow: { alignItems: "center", paddingVertical: 16 },
   emptyText: { fontSize: 14, fontFamily: "Inter_400Regular" },

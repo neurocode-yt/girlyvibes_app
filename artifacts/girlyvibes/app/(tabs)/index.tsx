@@ -143,12 +143,10 @@ function HeaderRibbon({
   topInset,
   greeting,
   streak,
-  onProfile,
 }: {
   topInset: number;
   greeting: string;
   streak: number;
-  onProfile: () => void;
 }) {
   return (
     <View style={[styles.headerArea, { paddingTop: topInset + 8 }]}>
@@ -178,9 +176,6 @@ function HeaderRibbon({
       </View>
 
       <View style={styles.headerActions}>
-        <Pressable onPress={onProfile} style={styles.profileBubble}>
-          <MaterialCommunityIcons name="account-outline" size={27} color={ROSE} />
-        </Pressable>
         <View style={styles.streakBubble}>
           <Ionicons name="flame" size={20} color={BROWN} />
           <Text style={styles.streakText}>{streak}</Text>
@@ -358,10 +353,6 @@ export default function HomeScreen() {
           topInset={topInset}
           greeting={greeting}
           streak={data.streak}
-          onProfile={() => {
-            Haptics.selectionAsync();
-            router.push("/(tabs)/profile");
-          }}
         />
 
         <View style={styles.content}>

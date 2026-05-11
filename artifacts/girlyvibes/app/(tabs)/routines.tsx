@@ -16,6 +16,7 @@ import { useApp } from "@/contexts/AppContext";
 import { ROUTINE_TEMPLATES, type RoutineTemplate } from "@/data/routines";
 import { useColors } from "@/hooks/useColors";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { FloatingEmojis } from "@/components/FloatingEmojis";
 
 function RoutineCard({
   routine,
@@ -36,11 +37,13 @@ function RoutineCard({
   const routineCompleted = isRoutineCompleted(routine.id);
 
   async function handleStep(stepId: string) {
+    if (routineCompleted) return;
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     await toggleRoutineStep(routine.id, stepId);
   }
 
   async function handleComplete() {
+    if (routineCompleted) return;
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     await completeRoutine(routine.id);
   }
@@ -52,107 +55,115 @@ function RoutineCard({
         { borderColor: colors.border, backgroundColor: colors.card },
       ]}
     >
-      <Pressable onPress={onToggle} style={styles.cardHeader}>
-        <View style={[styles.iconBox, { backgroundColor: routine.color }]}>
-          <MaterialCommunityIcons
-            name={routine.emoji}
-            size={22}
-            color={colors.primary}
+      <View style={routineCompleted ? { opacity: 0.6 } : undefined}>
+        <Pressable 
+          onPress={routineCompleted ? undefined : onToggle} 
+          style={styles.cardHeader}
+        >
+          <View style={[styles.iconBox, { backgroundColor: routineCompleted ? colors.muted : routine.color }]}>
+            <MaterialCommunityIcons
+              name={routine.emoji}
+              size={22}
+              color={colors.primary}
+            />
+          </View>
+          <View style={{ flex: 1, marginLeft: 12 }}>
+            <Text style={[styles.cardTitle, { color: colors.foreground, textDecorationLine: routineCompleted ? 'line-through' : 'none' }]}>
+              {l(routine.title, routine.titleEn)}
+            </Text>
+            <Text style={[styles.cardSub, { color: colors.mutedForeground }]}>
+              {l(routine.subtitle, routine.subtitleEn)}
+            </Text>
+          </View>
+          <View style={styles.cardRight}>
+            <Text style={[styles.percentText, { color: colors.primary }]}>
+              {percent}%
+            </Text>
+            <MaterialCommunityIcons
+              name={isExpanded ? "chevron-up" : "chevron-down"}
+              size={20}
+              color={colors.mutedForeground}
+            />
+          </View>
+        </Pressable>
+
+        <View style={[styles.progressBar, { backgroundColor: colors.border }]}>
+          <View
+            style={[
+              styles.progressFill,
+              { width: `${percent}%` as `${number}%`, backgroundColor: colors.primary },
+            ]}
           />
         </View>
-        <View style={{ flex: 1, marginLeft: 12 }}>
-          <Text style={[styles.cardTitle, { color: colors.foreground }]}>
-            {l(routine.title, routine.titleEn)}
-          </Text>
-          <Text style={[styles.cardSub, { color: colors.mutedForeground }]}>
-            {l(routine.subtitle, routine.subtitleEn)}
-          </Text>
-        </View>
-        <View style={styles.cardRight}>
-          <Text style={[styles.percentText, { color: colors.primary }]}>
-            {percent}%
-          </Text>
-          <MaterialCommunityIcons
-            name={isExpanded ? "chevron-up" : "chevron-down"}
-            size={20}
-            color={colors.mutedForeground}
-          />
-        </View>
-      </Pressable>
 
-      <View style={[styles.progressBar, { backgroundColor: colors.border }]}>
-        <View
-          style={[
-            styles.progressFill,
-            { width: `${percent}%` as `${number}%`, backgroundColor: colors.primary },
-          ]}
-        />
-      </View>
-
-      {isExpanded && (
-        <View style={styles.steps}>
-          {routine.steps.map((step) => {
-            const done = isStepCompleted(routine.id, step.id);
-            return (
-              <Pressable
-                key={step.id}
-                style={[
-                  styles.stepRow,
-                  { borderColor: colors.border },
-                ]}
-                onPress={() => handleStep(step.id)}
-              >
-                <View
+        {isExpanded && !routineCompleted && (
+          <View style={styles.steps}>
+            {routine.steps.map((step) => {
+              const done = isStepCompleted(routine.id, step.id);
+              return (
+                <Pressable
+                  key={step.id}
                   style={[
-                    styles.checkbox,
-                    {
-                      borderColor: done ? colors.primary : colors.border,
-                      backgroundColor: done ? colors.primary : "transparent",
-                    },
+                    styles.stepRow,
+                    { borderColor: colors.border },
                   ]}
+                  onPress={() => handleStep(step.id)}
+                  disabled={routineCompleted}
                 >
-                  {done && (
-                    <MaterialCommunityIcons name="check" size={12} color="#fff" />
-                  )}
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text
+                  <View
                     style={[
-                      styles.stepTitle,
+                      styles.checkbox,
                       {
-                        color: done ? colors.mutedForeground : colors.foreground,
-                        textDecorationLine: done ? "line-through" : "none",
+                        borderColor: done ? colors.primary : colors.border,
+                        backgroundColor: done ? colors.primary : "transparent",
                       },
                     ]}
                   >
-                    {l(step.title, step.titleEn)}
-                  </Text>
-                  {step.subtitle && (
+                    {done && (
+                      <MaterialCommunityIcons name="check" size={12} color="#fff" />
+                    )}
+                  </View>
+                  <View style={{ flex: 1 }}>
                     <Text
                       style={[
-                        styles.stepSub,
-                        { color: colors.mutedForeground },
+                        styles.stepTitle,
+                        {
+                          color: done ? colors.mutedForeground : colors.foreground,
+                          textDecorationLine: done ? "line-through" : "none",
+                        },
                       ]}
                     >
-                      {l(step.subtitle, step.subtitleEn ?? "")}
+                      {l(step.title, step.titleEn)}
                     </Text>
-                  )}
-                </View>
-              </Pressable>
-            );
-          })}
+                    {step.subtitle && (
+                      <Text
+                        style={[
+                          styles.stepSub,
+                          { color: colors.mutedForeground },
+                        ]}
+                      >
+                        {l(step.subtitle, step.subtitleEn ?? "")}
+                      </Text>
+                    )}
+                  </View>
+                </Pressable>
+              );
+            })}
 
-          {allDone && !routineCompleted && (
-            <Pressable
-              style={[styles.completeBtn, { backgroundColor: colors.primary }]}
-              onPress={handleComplete}
-            >
-              <MaterialCommunityIcons name="check-circle" size={18} color="#fff" />
-              <Text style={styles.completeBtnText}>{t.routines.markComplete}</Text>
-            </Pressable>
-          )}
-        </View>
-      )}
+            {allDone && !routineCompleted && (
+              <Pressable
+                style={[styles.completeBtn, { backgroundColor: colors.primary }]}
+                onPress={handleComplete}
+              >
+                <MaterialCommunityIcons name="check-circle" size={18} color="#fff" />
+                <Text style={styles.completeBtnText}>{t.routines.markComplete}</Text>
+              </Pressable>
+            )}
+          </View>
+        )}
+      </View>
+
+      {routineCompleted && <FloatingEmojis />}
     </View>
   );
 }
