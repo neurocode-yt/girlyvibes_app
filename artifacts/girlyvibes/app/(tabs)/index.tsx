@@ -1,13 +1,16 @@
 import { AppIonicons as Ionicons, AppMaterialCommunityIcons as MaterialCommunityIcons } from "@/components/Icons";
 import { Translations } from "@/constants/i18n";
-import { useApp } from "@/contexts/AppContext";
+import { useApp, type VisionBoardMode } from "@/contexts/AppContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { ADVICE_CATEGORIES } from "@/data/advice";
-import { ROUTINE_TEMPLATES } from "@/data/routines";
+import { ROUTINE_TEMPLATES, type RoutineTemplate } from "@/data/routines";
 import * as Haptics from "expo-haptics";
+import { Image } from "expo-image";
+import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import React, { useMemo } from "react";
 import {
+  Alert,
   Dimensions,
   Platform,
   Pressable,
@@ -32,7 +35,7 @@ const LINE = "rgba(117, 91, 71, 0.14)";
 function getGreeting(t: Translations) {
   const hour = new Date().getHours();
   if (hour < 12) return t.home.greetingMorning;
-  if (hour < 17) return t.home.greetingAfternoon;
+  if (hour < 18) return t.home.greetingAfternoon;
   return t.home.greetingEvening;
 }
 
@@ -64,14 +67,29 @@ function getTip(lang: string) {
   return tips[today % tips.length];
 }
 
+function mergeRoutineTemplates(saved: RoutineTemplate[] = []) {
+  const savedById = new Map(saved.map((routine) => [routine.id, routine]));
+  const templateIds = new Set(ROUTINE_TEMPLATES.map((routine) => routine.id));
+  return [
+    ...ROUTINE_TEMPLATES.map((routine) => savedById.get(routine.id) ?? routine),
+    ...saved.filter((routine) => !templateIds.has(routine.id)),
+  ];
+}
+
+function getVisionAspect(mode: VisionBoardMode) {
+  if (mode === "horizontal") return 16 / 9;
+  if (mode === "vertical") return 4 / 5;
+  return 1;
+}
+
+function getPickerAspect(mode: VisionBoardMode): [number, number] {
+  if (mode === "horizontal") return [16, 9];
+  if (mode === "vertical") return [4, 5];
+  return [1, 1];
+}
+
 function cleanSparkleText(value: string) {
-  return value
-    .replace("âœ¦", "")
-    .replace("â†’", "")
-    .replace("→", "")
-    .replace("✦", "")
-    .replace("✧", "")
-    .trim();
+  return value.replace(/[✦✧→]/g, "").trim();
 }
 
 function PaperGrid() {
@@ -140,10 +158,12 @@ function Sparkles({ style, gold = false, size = 64 }: { style?: object; gold?: b
 }
 
 function HeaderRibbon({
+  displayName,
   topInset,
   greeting,
   streak,
 }: {
+  displayName: string;
   topInset: number;
   greeting: string;
   streak: number;
@@ -168,10 +188,10 @@ function HeaderRibbon({
           <Path d="M288 28 L272 58 L288 88" fill="none" stroke="#C5A789" strokeWidth="2" />
         </Svg>
         <Text style={styles.greeting} numberOfLines={1}>
-          {cleanSparkleText(greeting)} ✧✧
+          {cleanSparkleText(greeting)}
         </Text>
         <Text style={styles.brandName} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>
-          Girly Vibes
+          {displayName}
         </Text>
       </View>
 
@@ -320,14 +340,26 @@ function ShortcutCard({
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { data, getRoutineCompletionPercent } = useApp();
+  const { data, getRoutineCompletionPercent, updateVisionBoard } = useApp();
   const { t, l, lang } = useLanguage();
 
   const greeting = getGreeting(t);
   const dailyTip = getTip(lang);
+  const displayName = data.profileName.trim() || t.home.defaultName;
 
-  const topRoutine = useMemo(() => ROUTINE_TEMPLATES[0], []);
-  const morningProgress = getRoutineCompletionPercent("morning", ROUTINE_TEMPLATES[0].steps.length);
+  const routines = useMemo(
+    () => mergeRoutineTemplates(data.customRoutines ?? []),
+    [data.customRoutines],
+  );
+  const favoriteRoutine = useMemo(
+    () =>
+      routines.find((routine) => routine.id === data.favoriteRoutineId) ??
+      routines[0] ??
+      ROUTINE_TEMPLATES[0],
+    [data.favoriteRoutineId, routines],
+  );
+  const favoriteProgress = getRoutineCompletionPercent(favoriteRoutine.id, favoriteRoutine.steps.length);
+  const visionMode = data.visionBoardMode ?? "square";
 
   const featuredAdvice = useMemo(() => {
     const allCards = ADVICE_CATEGORIES.flatMap((c) => c.cards);
@@ -337,10 +369,36 @@ export default function HomeScreen() {
 
   const featuredCategory = ADVICE_CATEGORIES.find((c) => c.id === featuredAdvice.category);
   const topInset = Platform.OS === "web" ? 44 : insets.top;
-  const hasActivePlan = Boolean(
-    data.glowUpProgress.activePlanId ||
-      (data.glowUpProgress.activePlanIds && data.glowUpProgress.activePlanIds.length > 0),
-  );
+
+  const setVisionMode = async (mode: VisionBoardMode) => {
+    await updateVisionBoard(data.visionBoardImage, mode);
+    Haptics.selectionAsync();
+  };
+
+  const pickVisionBoard = async () => {
+    if (Platform.OS !== "web") {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert(
+          l("إذن مطلوب", "Permission Required"),
+          l("اسمحي للتطبيق بالوصول للصور حتى تختاري لوحة الرؤية.", "Please allow photo access to choose a vision board image."),
+        );
+        return;
+      }
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: getPickerAspect(visionMode),
+      quality: 0.86,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      await updateVisionBoard(result.assets[0].uri, visionMode);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+  };
 
   return (
     <View style={styles.root}>
@@ -350,6 +408,7 @@ export default function HomeScreen() {
         contentContainerStyle={styles.scrollContent}
       >
         <HeaderRibbon
+          displayName={displayName}
           topInset={topInset}
           greeting={greeting}
           streak={data.streak}
@@ -392,7 +451,7 @@ export default function HomeScreen() {
             <ShortcutCard
               color="#F8D1DC"
               label={t.tabs.advice}
-              icon={<MaterialCommunityIcons name="heart-outline" size={27} color={ROSE} />}
+              icon={<MaterialCommunityIcons name="notebook-outline" size={27} color={ROSE} />}
               onPress={() => {
                 Haptics.selectionAsync();
                 router.push("/(tabs)/advice");
@@ -418,6 +477,64 @@ export default function HomeScreen() {
             />
           </View>
 
+          <Text style={styles.sectionTitle}>{t.home.visionBoard}</Text>
+          <View style={styles.visionCard}>
+            <View style={styles.visionTop}>
+              <View style={styles.visionTitleRow}>
+                <MaterialCommunityIcons name="image-heart" size={21} color={ROSE} />
+                <Text style={styles.visionTitle}>{t.home.visionBoard}</Text>
+              </View>
+              <Text style={styles.visionSub}>{t.home.visionBoardSub}</Text>
+            </View>
+
+            <Pressable
+              style={[
+                styles.visionFrame,
+                { aspectRatio: getVisionAspect(visionMode) },
+                visionMode === "vertical" && styles.visionFrameVertical,
+              ]}
+              onPress={pickVisionBoard}
+            >
+              {data.visionBoardImage ? (
+                <Image source={{ uri: data.visionBoardImage }} style={styles.visionImage} contentFit="cover" />
+              ) : (
+                <View style={styles.visionEmpty}>
+                  <MaterialCommunityIcons name="image-plus-outline" size={34} color={ROSE} />
+                  <Text style={styles.visionEmptyText}>{t.home.visionBoardEmpty}</Text>
+                </View>
+              )}
+            </Pressable>
+
+            <View style={styles.visionControls}>
+              {([
+                ["square", t.home.visionBoardSquare],
+                ["horizontal", t.home.visionBoardHorizontal],
+                ["vertical", t.home.visionBoardVertical],
+              ] as [VisionBoardMode, string][]).map(([mode, label]) => (
+                <Pressable
+                  key={mode}
+                  style={[styles.visionModeBtn, visionMode === mode && styles.visionModeBtnActive]}
+                  onPress={() => setVisionMode(mode)}
+                >
+                  <Text style={[styles.visionModeText, visionMode === mode && styles.visionModeTextActive]}>
+                    {label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+
+            <Pressable style={styles.visionPickBtn} onPress={pickVisionBoard}>
+              <MaterialCommunityIcons
+                name={data.visionBoardImage ? "image-edit-outline" : "image-plus-outline"}
+                size={18}
+                color="#fff"
+              />
+              <Text style={styles.visionPickText}>
+                {data.visionBoardImage ? t.home.changeImage : t.home.chooseImage}
+              </Text>
+            </Pressable>
+          </View>
+
           <Text style={styles.sectionTitle}>{t.home.morningRoutineSection}</Text>
           <Pressable
             style={styles.routineCard}
@@ -429,35 +546,15 @@ export default function HomeScreen() {
             <Flower small style={styles.routineFlower} />
             <View style={styles.routineTop}>
               <View style={styles.routineCopy}>
-                <Text style={styles.routineTitle}>{l(topRoutine.title, topRoutine.titleEn)}</Text>
+                <Text style={styles.routineTitle}>{l(favoriteRoutine.title, favoriteRoutine.titleEn)}</Text>
                 <Text style={styles.routineSteps}>
-                  {topRoutine.steps.length} {l("خطوة", "steps")}
+                  {favoriteRoutine.steps.length} {l("خطوة", "steps")}
                 </Text>
               </View>
-              <WreathProgress percent={morningProgress} />
+              <WreathProgress percent={favoriteProgress} />
             </View>
-            <FloralProgressBar percent={morningProgress} />
+            <FloralProgressBar percent={favoriteProgress} />
             <Text style={styles.tapHint}>{cleanSparkleText(t.home.tapToContinue)} ✿</Text>
-          </Pressable>
-
-          <Text style={styles.sectionTitle}>{t.home.activeplan}</Text>
-          <Pressable
-            style={styles.planBanner}
-            onPress={() => {
-              Haptics.selectionAsync();
-              router.push("/(tabs)/glowup");
-            }}
-          >
-            <Text style={styles.bannerMoon}>☾</Text>
-            <View style={styles.bannerCopy}>
-              <Text style={styles.planBannerTitle}>
-                {hasActivePlan ? "You're on a Glow Up plan! ✨" : "Start your journey ✨"}
-              </Text>
-              <Text style={styles.planBannerSub}>
-                {hasActivePlan ? "Keep going - you're amazing" : "Choose a plan and start glowing"}
-              </Text>
-            </View>
-            <Flower small style={styles.bannerFlower} />
           </Pressable>
 
           <Text style={styles.sectionTitle}>{t.home.readOfDay}</Text>
@@ -729,6 +826,113 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 15,
     textAlign: "center",
+  },
+  visionCard: {
+    backgroundColor: "#F9E5EA",
+    borderColor: "rgba(126, 83, 68, 0.16)",
+    borderRadius: 16,
+    borderWidth: 1,
+    overflow: "hidden",
+    padding: 14,
+    width: CARD_WIDTH,
+  },
+  visionTop: {
+    marginBottom: 12,
+  },
+  visionTitleRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 8,
+  },
+  visionTitle: {
+    color: BROWN,
+    fontFamily: "Inter_700Bold",
+    fontSize: 17,
+    lineHeight: 22,
+  },
+  visionSub: {
+    color: INK,
+    fontFamily: "Inter_400Regular",
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 4,
+  },
+  visionFrame: {
+    alignItems: "center",
+    alignSelf: "stretch",
+    backgroundColor: "#FFF7F9",
+    borderColor: "rgba(142, 75, 90, 0.16)",
+    borderRadius: 14,
+    borderWidth: 1,
+    justifyContent: "center",
+    overflow: "hidden",
+    width: "100%",
+  },
+  visionFrameVertical: {
+    alignSelf: "center",
+    width: "72%",
+  },
+  visionImage: {
+    height: "100%",
+    width: "100%",
+  },
+  visionEmpty: {
+    alignItems: "center",
+    gap: 8,
+    justifyContent: "center",
+    paddingHorizontal: 18,
+  },
+  visionEmptyText: {
+    color: "#8E4B5A",
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 13,
+    lineHeight: 18,
+    textAlign: "center",
+  },
+  visionControls: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 12,
+  },
+  visionModeBtn: {
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.7)",
+    borderColor: "rgba(142,75,90,0.14)",
+    borderRadius: 14,
+    borderWidth: 1,
+    flex: 1,
+    minHeight: 36,
+    justifyContent: "center",
+    paddingHorizontal: 8,
+  },
+  visionModeBtnActive: {
+    backgroundColor: "#F2C7D1",
+    borderColor: "rgba(142,75,90,0.24)",
+  },
+  visionModeText: {
+    color: INK,
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 12,
+    textAlign: "center",
+  },
+  visionModeTextActive: {
+    color: BROWN,
+  },
+  visionPickBtn: {
+    alignItems: "center",
+    alignSelf: "flex-start",
+    backgroundColor: ROSE,
+    borderRadius: 15,
+    flexDirection: "row",
+    gap: 7,
+    marginTop: 12,
+    minHeight: 40,
+    paddingHorizontal: 14,
+  },
+  visionPickText: {
+    color: "#fff",
+    fontFamily: "Inter_700Bold",
+    fontSize: 13,
   },
   sectionTitle: {
     color: "#5A2A2A",

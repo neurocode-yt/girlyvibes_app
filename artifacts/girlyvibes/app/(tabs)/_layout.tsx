@@ -100,13 +100,15 @@ function TabGlyph({
       return (
         <Svg width={size} height={size} viewBox="0 0 32 32">
           <Path
-            d="M16 27 C8 20.2 5 17.2 5 12.5 C5 9.5 7.4 7 10.3 7 C12.5 7 14.4 8.2 16 10 C17.6 8.2 19.5 7 21.7 7 C24.6 7 27 9.5 27 12.5 C27 17.2 24 20.2 16 27 Z"
-            fill={filled ? color : "none"}
-            opacity={filled ? 0.26 : 1}
+            d="M8 5.5 H20 L25 10.5 V26.5 H8 Z"
+            fill={softFill}
+            opacity={filled ? 0.2 : 1}
             stroke={color}
             strokeWidth={strokeWidth}
             strokeLinejoin="round"
           />
+          <Path d="M20 5.5 V11 H25" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinejoin="round" />
+          <Path d="M12 15 H21 M12 19 H21 M12 23 H18" stroke={color} strokeLinecap="round" strokeWidth="1.5" />
         </Svg>
       );
     }

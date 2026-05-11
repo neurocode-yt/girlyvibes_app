@@ -2,7 +2,7 @@ import { AppIonicons as Ionicons, AppMaterialCommunityIcons as MaterialCommunity
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   FlatList,
   Platform,
@@ -10,6 +10,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -19,7 +20,11 @@ import { ADVICE_CATEGORIES, type AdviceCard } from "@/data/advice";
 import { useColors } from "@/hooks/useColors";
 import { useLanguage } from "@/contexts/LanguageContext";
 
-function AdviceCardItem({ card }: { card: AdviceCard }) {
+function normalizeSearch(value: string) {
+  return value.trim().toLocaleLowerCase();
+}
+
+function AdviceCardItem({ card, highlight }: { card: AdviceCard; highlight?: string }) {
   const colors = useColors();
   const router = useRouter();
   const { isFavorite, toggleFavoriteAdvice } = useApp();
@@ -36,7 +41,10 @@ function AdviceCardItem({ card }: { card: AdviceCard }) {
       ]}
       onPress={() => {
         Haptics.selectionAsync();
-        router.push({ pathname: "/advice-detail", params: { cardId: card.id } });
+        router.push({
+          pathname: "/advice-detail",
+          params: highlight ? { cardId: card.id, highlight } : { cardId: card.id },
+        });
       }}
     >
       <View style={styles.adviceCardTop}>
@@ -83,14 +91,31 @@ export default function AdviceScreen() {
   const insets = useSafeAreaInsets();
   const { t, l } = useLanguage();
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [query, setQuery] = useState("");
 
   const topInset = Platform.OS === "web" ? 67 : insets.top;
 
-  const allCards = ADVICE_CATEGORIES.flatMap((c) => c.cards);
-  const filtered =
-    selectedCategory === "all"
+  const allCards = useMemo(() => ADVICE_CATEGORIES.flatMap((c) => c.cards), []);
+  const normalizedQuery = normalizeSearch(query);
+  const filtered = useMemo(() => {
+    if (normalizedQuery) {
+      return allCards.filter((card) => {
+        const category = ADVICE_CATEGORIES.find((c) => c.id === card.category);
+        const searchable = [
+          l(card.title, card.titleEn),
+          l(card.preview, card.previewEn),
+          l(card.content, card.contentEn),
+          category ? l(category.title, category.titleEn) : "",
+        ]
+          .join(" ")
+          .toLocaleLowerCase();
+        return searchable.includes(normalizedQuery);
+      });
+    }
+    return selectedCategory === "all"
       ? allCards
-      : allCards.filter((c) => c.category === selectedCategory);
+      : allCards.filter((card) => card.category === selectedCategory);
+  }, [allCards, l, normalizedQuery, selectedCategory]);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -104,6 +129,23 @@ export default function AdviceScreen() {
         <Text style={[styles.headerSub, { color: colors.mutedForeground }]}>
           {t.advice.screenSubtitle}
         </Text>
+
+        <View style={[styles.searchWrap, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Ionicons name="search-outline" size={18} color={colors.mutedForeground} />
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder={t.advice.searchPlaceholder}
+            placeholderTextColor={colors.mutedForeground}
+            style={[styles.searchInput, { color: colors.foreground }]}
+            returnKeyType="search"
+          />
+          {!!query && (
+            <Pressable onPress={() => setQuery("")} hitSlop={8}>
+              <Ionicons name="close-circle" size={18} color={colors.mutedForeground} />
+            </Pressable>
+          )}
+        </View>
 
         {/* Category Pills */}
         <ScrollView
@@ -167,7 +209,15 @@ export default function AdviceScreen() {
       <FlatList
         data={filtered}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <AdviceCardItem card={item} />}
+        renderItem={({ item }) => <AdviceCardItem card={item} highlight={normalizedQuery ? query.trim() : undefined} />}
+        ListEmptyComponent={
+          <View style={styles.emptySearch}>
+            <MaterialCommunityIcons name="book-search-outline" size={28} color={colors.mutedForeground} />
+            <Text style={[styles.emptySearchText, { color: colors.mutedForeground }]}>
+              {t.advice.noResults}
+            </Text>
+          </View>
+        }
         contentContainerStyle={{
           paddingHorizontal: 16,
           paddingTop: 8,
@@ -194,6 +244,22 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: "Inter_400Regular",
     marginTop: 4,
+  },
+  searchWrap: {
+    alignItems: "center",
+    borderRadius: 18,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 16,
+    minHeight: 46,
+    paddingHorizontal: 13,
+  },
+  searchInput: {
+    flex: 1,
+    fontFamily: "Inter_500Medium",
+    fontSize: 14,
+    paddingVertical: 10,
   },
   pillsRow: {
     gap: 8,
@@ -248,5 +314,17 @@ const styles = StyleSheet.create({
   readTime: {
     fontSize: 12,
     fontFamily: "Inter_400Regular",
+  },
+  emptySearch: {
+    alignItems: "center",
+    gap: 8,
+    justifyContent: "center",
+    paddingHorizontal: 24,
+    paddingTop: 56,
+  },
+  emptySearchText: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 14,
+    textAlign: "center",
   },
 });

@@ -7,6 +7,8 @@ import React, {
   useState,
 } from "react";
 
+import { ROUTINE_TEMPLATES, type RoutineTemplate } from "@/data/routines";
+
 const STORAGE_KEY = "girlyvibes_app_data";
 
 interface RoutineProgress {
@@ -32,6 +34,8 @@ interface DetoxChallenge {
   startDate: string | null;
   checkedInDays: string[];
 }
+
+export type VisionBoardMode = "square" | "horizontal" | "vertical";
 
 export interface DiaryEntry {
   id: string;        // date key YYYY-MM-DD
@@ -77,8 +81,12 @@ interface AppData {
   favoriteAdvice: string[];
   profileName: string;
   profilePhoto: string | null;
+  favoriteRoutineId: string | null;
+  visionBoardImage: string | null;
+  visionBoardMode: VisionBoardMode;
   diaryEntries: { [dateKey: string]: DiaryEntry };
   diaryNotes: DiaryNote[];
+  customRoutines: RoutineTemplate[];
   lastRoutineResetDate?: string;
 }
 
@@ -90,6 +98,10 @@ interface AppContextType {
   saveNote: (note: DiaryNote) => Promise<void>;
   deleteNote: (noteId: string) => Promise<void>;
   updateNote: (noteId: string, text: string, color: string, richContent?: RichBlock[], title?: string) => Promise<void>;
+  saveUserRoutine: (routine: RoutineTemplate) => Promise<void>;
+  deleteUserRoutine: (routineId: string) => Promise<void>;
+  setFavoriteRoutine: (routineId: string | null) => Promise<void>;
+  updateVisionBoard: (imageUri: string | null, mode?: VisionBoardMode) => Promise<void>;
   toggleRoutineStep: (routineId: string, stepId: string) => Promise<void>;
   isStepCompleted: (routineId: string, stepId: string) => boolean;
   getRoutineCompletionPercent: (routineId: string, totalSteps: number) => number;
@@ -130,8 +142,12 @@ const DEFAULT_DATA: AppData = {
   favoriteAdvice: [],
   profileName: "",
   profilePhoto: null,
+  favoriteRoutineId: null,
+  visionBoardImage: null,
+  visionBoardMode: "square",
   diaryEntries: {},
   diaryNotes: [],
+  customRoutines: [],
 };
 
 const AppContext = createContext<AppContextType | null>(null);
@@ -141,24 +157,43 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY).then((raw) => {
-      if (raw) {
+          if (raw) {
         try {
           const parsed = JSON.parse(raw);
+          const parsedData: AppData = {
+            ...DEFAULT_DATA,
+            ...parsed,
+            glowUpProgress: {
+              ...DEFAULT_DATA.glowUpProgress,
+              ...(parsed.glowUpProgress ?? {}),
+            },
+            detoxChallenge: {
+              ...DEFAULT_DATA.detoxChallenge,
+              ...(parsed.detoxChallenge ?? {}),
+            },
+            favoriteAdvice: parsed.favoriteAdvice ?? [],
+            favoriteRoutineId: parsed.favoriteRoutineId ?? null,
+            visionBoardImage: parsed.visionBoardImage ?? null,
+            visionBoardMode: parsed.visionBoardMode ?? "square",
+            diaryEntries: parsed.diaryEntries ?? {},
+            diaryNotes: parsed.diaryNotes ?? [],
+            customRoutines: parsed.customRoutines ?? [],
+          };
           const today = new Date().toDateString();
           let needsSave = false;
 
           // Daily reset for routines
-          if (parsed.lastRoutineResetDate !== today) {
-            parsed.routineProgress = {};
-            parsed.completedRoutines = {};
-            parsed.lastRoutineResetDate = today;
+          if (parsedData.lastRoutineResetDate !== today) {
+            parsedData.routineProgress = {};
+            parsedData.completedRoutines = {};
+            parsedData.lastRoutineResetDate = today;
             needsSave = true;
           }
 
-          setData(parsed);
+          setData(parsedData);
           
           if (needsSave) {
-            AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+            AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(parsedData));
           }
         } catch {
           // ignore
@@ -180,6 +215,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const updateProfile = useCallback(
     async (name: string, photo: string | null) => {
       await save({ ...data, profileName: name, profilePhoto: photo });
+    },
+    [data, save]
+  );
+
+  const setFavoriteRoutine = useCallback(
+    async (routineId: string | null) => {
+      await save({ ...data, favoriteRoutineId: routineId });
+    },
+    [data, save]
+  );
+
+  const updateVisionBoard = useCallback(
+    async (imageUri: string | null, mode: VisionBoardMode = data.visionBoardMode ?? "square") => {
+      await save({ ...data, visionBoardImage: imageUri, visionBoardMode: mode });
     },
     [data, save]
   );
@@ -222,7 +271,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     (routineId: string, totalSteps: number) => {
       if (totalSteps === 0) return 0;
       const steps = data.routineProgress[routineId] ?? {};
-      const done = Object.values(steps).filter(Boolean).length;
+      const done = Math.min(Object.values(steps).filter(Boolean).length, totalSteps);
       return Math.round((done / totalSteps) * 100);
     },
     [data]
@@ -480,6 +529,39 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [data, save]
   );
 
+  const saveUserRoutine = useCallback(
+    async (routine: RoutineTemplate) => {
+      const existing = data.customRoutines ?? [];
+      const next = existing.some((item) => item.id === routine.id)
+        ? existing.map((item) => (item.id === routine.id ? routine : item))
+        : [...existing, routine];
+      await save({ ...data, customRoutines: next });
+    },
+    [data, save]
+  );
+
+  const deleteUserRoutine = useCallback(
+    async (routineId: string) => {
+      const customRoutines = (data.customRoutines ?? []).filter((routine) => routine.id !== routineId);
+      const routineProgress = { ...data.routineProgress };
+      const completedRoutines = { ...(data.completedRoutines ?? {}) };
+      const templateIds = new Set(ROUTINE_TEMPLATES.map((routine) => routine.id));
+      delete routineProgress[routineId];
+      delete completedRoutines[routineId];
+      await save({
+        ...data,
+        customRoutines,
+        routineProgress,
+        completedRoutines,
+        favoriteRoutineId:
+          data.favoriteRoutineId === routineId && !templateIds.has(routineId)
+            ? null
+            : data.favoriteRoutineId,
+      });
+    },
+    [data, save]
+  );
+
   return (
     <AppContext.Provider
       value={{
@@ -490,6 +572,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         saveNote,
         deleteNote,
         updateNote,
+        saveUserRoutine,
+        deleteUserRoutine,
+        setFavoriteRoutine,
+        updateVisionBoard,
         toggleRoutineStep,
         isStepCompleted,
         getRoutineCompletionPercent,

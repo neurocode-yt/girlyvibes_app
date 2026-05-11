@@ -6,7 +6,9 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  StyleProp,
   Text,
+  TextStyle,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -16,11 +18,47 @@ import { ADVICE_CATEGORIES } from "@/data/advice";
 import { useColors } from "@/hooks/useColors";
 import { useLanguage } from "@/contexts/LanguageContext";
 
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function HighlightedText({
+  query,
+  style,
+  text,
+}: {
+  query?: string;
+  style: StyleProp<TextStyle>;
+  text: string;
+}) {
+  const cleanQuery = query?.trim();
+  if (!cleanQuery) {
+    return <Text style={style}>{text}</Text>;
+  }
+
+  const parts = text.split(new RegExp(`(${escapeRegExp(cleanQuery)})`, "gi"));
+  const lowerQuery = cleanQuery.toLocaleLowerCase();
+
+  return (
+    <Text style={style}>
+      {parts.map((part, index) =>
+        part.toLocaleLowerCase() === lowerQuery ? (
+          <Text key={`${part}-${index}`} style={styles.highlightedWord}>
+            {part}
+          </Text>
+        ) : (
+          <React.Fragment key={`${part}-${index}`}>{part}</React.Fragment>
+        ),
+      )}
+    </Text>
+  );
+}
+
 export default function AdviceDetailScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { cardId } = useLocalSearchParams<{ cardId: string }>();
+  const { cardId, highlight } = useLocalSearchParams<{ cardId: string; highlight?: string }>();
   const { isFavorite, toggleFavoriteAdvice } = useApp();
   const { l, isRTL } = useLanguage();
 
@@ -39,6 +77,7 @@ export default function AdviceDetailScreen() {
   }
 
   const fav = isFavorite(card.id);
+  const highlightedQuery = Array.isArray(highlight) ? highlight[0] : highlight;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -89,9 +128,11 @@ export default function AdviceDetailScreen() {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={[styles.title, { color: colors.foreground }]}>
-          {l(card.title, card.titleEn)}
-        </Text>
+        <HighlightedText
+          text={l(card.title, card.titleEn)}
+          query={highlightedQuery}
+          style={[styles.title, { color: colors.foreground }]}
+        />
         <View style={styles.metaRow}>
           <MaterialCommunityIcons
             name="clock-outline"
@@ -105,15 +146,17 @@ export default function AdviceDetailScreen() {
         <View
           style={[styles.divider, { backgroundColor: colors.border }]}
         />
-        <Text style={[styles.body, { color: colors.foreground }]}>
-          {l(card.content, card.contentEn)}
-        </Text>
+        <HighlightedText
+          text={l(card.content, card.contentEn)}
+          query={highlightedQuery}
+          style={[styles.body, { color: colors.foreground }]}
+        />
 
         <View
           style={[styles.quoteBox, { backgroundColor: colors.card, borderColor: colors.primary }]}
         >
           <MaterialCommunityIcons
-            name="star-four-points"
+            name="notebook-outline"
             size={16}
             color={colors.primary}
           />
@@ -174,6 +217,12 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
     lineHeight: 26,
     marginBottom: 28,
+  },
+  highlightedWord: {
+    backgroundColor: "#FFE18A",
+    borderRadius: 4,
+    color: "#5A2A2A",
+    fontFamily: "Inter_700Bold",
   },
   quoteBox: {
     padding: 16,
