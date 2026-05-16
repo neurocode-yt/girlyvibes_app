@@ -6,6 +6,10 @@ import { Audio } from "expo-av";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import * as ImagePicker from "expo-image-picker";
+import * as FileSystem from "expo-file-system";
+import * as ImageManipulator from "expo-image-manipulator";
+import { Image } from "expo-image";
 import {
   Alert,
   Animated,
@@ -835,6 +839,7 @@ const BLOCK_SIZES: Record<RichBlock["type"], { fontSize: number; lineHeight: num
   small: { fontSize: 13, lineHeight: 20 },
   bullet: { fontSize: 16, lineHeight: 24 },
   audio: { fontSize: 14, lineHeight: 20 },
+  image: { fontSize: 14, lineHeight: 20 },
 };
 
 const RICH_TEXT_COLORS = [
@@ -864,6 +869,7 @@ function serializeNoteDraft(title: string, color: string, blocks: RichBlock[]) {
       color: b.color,
       fontStyle: b.fontStyle,
       audioUri: b.audioUri,
+      imageUri: b.imageUri,
       audioDurationMillis: b.audioDurationMillis,
       bulletSymbol: b.bulletSymbol,
       emojiScale: b.emojiScale,
@@ -1157,6 +1163,125 @@ const voiceStyles = StyleSheet.create({
   },
 });
 
+function ImageBlock({
+  block,
+  onUpdate,
+}: {
+  block: RichBlock;
+  onUpdate: (updates: Partial<RichBlock>) => void;
+}) {
+  const { l } = useLanguage();
+  const pickImage = async () => {
+    let result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      const uri = result.assets[0].uri;
+      onUpdate({
+        imageStoragePath: undefined,
+        imageUri: uri,
+        mediaBucket: undefined,
+        mimeType: result.assets[0].mimeType,
+        text: "",
+      });
+    }
+  };
+
+  const removeImage = () => {
+    onUpdate({
+      imageStoragePath: undefined,
+      imageUri: undefined,
+      mediaBucket: undefined,
+      mimeType: undefined,
+      text: "",
+    });
+  };
+
+  return (
+    <View style={imageBlockStyles.card}>
+      {block.imageUri ? (
+        <View style={imageBlockStyles.imageContainer}>
+          <Image source={{ uri: block.imageUri }} style={imageBlockStyles.image} contentFit="cover" />
+          <Pressable style={imageBlockStyles.removeBtn} onPress={removeImage}>
+            <Icon name="close" size={16} color="#fff" />
+          </Pressable>
+        </View>
+      ) : (
+        <Pressable style={imageBlockStyles.placeholder} onPress={pickImage}>
+          <Icon name="image-outline" size={24} color="#C2185B" />
+          <Text style={imageBlockStyles.placeholderText}>
+            {block.text || l("اضغطي لاختيار صورة", "Tap to pick an image")}
+          </Text>
+        </Pressable>
+      )}
+      {block.imageUri && (
+        <TextInput
+          style={voiceStyles.captionInput}
+          placeholder={l("تعليق قصير للصورة...", "Short caption for this image...")}
+          placeholderTextColor="rgba(51,51,51,0.45)"
+          value={block.text}
+          onChangeText={(text) => onUpdate({ text })}
+        />
+      )}
+    </View>
+  );
+}
+
+const imageBlockStyles = StyleSheet.create({
+  card: {
+    backgroundColor: "rgba(255,255,255,0.38)",
+    borderColor: "rgba(255,255,255,0.7)",
+    borderRadius: 20,
+    borderWidth: 1,
+    marginHorizontal: 14,
+    marginVertical: 8,
+    overflow: "hidden",
+    padding: 14,
+  },
+  placeholder: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 24,
+    borderWidth: 1,
+    borderColor: "rgba(194,24,91,0.3)",
+    borderStyle: "dashed",
+    borderRadius: 12,
+    backgroundColor: "rgba(255,107,157,0.05)",
+  },
+  placeholderText: {
+    marginTop: 8,
+    color: "#C2185B",
+    fontFamily: "Inter_500Medium",
+    fontSize: 13,
+  },
+  imageContainer: {
+    width: "100%",
+    aspectRatio: 1,
+    borderRadius: 12,
+    overflow: "hidden",
+    position: "relative",
+  },
+  image: {
+    width: "100%",
+    height: "100%",
+  },
+  removeBtn: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    borderRadius: 16,
+    width: 28,
+    height: 28,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+});
+
 function EmojiSizeSlider({
   value, onChange, onRelease,
 }: { value: number; onChange: (v: number) => void; onRelease: () => void }) {
@@ -1221,6 +1346,17 @@ function RichBlockInput({
         {isActive && <View style={[richBlockStyles.rail, { backgroundColor: "#C2185B" }]} />}
         <Pressable onPress={() => onFocus(block.id)}>
           <VoiceBlock block={block} onUpdate={(updates) => onUpdateBlock(block.id, updates)} />
+        </Pressable>
+      </View>
+    );
+  }
+
+  if (block.type === "image") {
+    return (
+      <View style={[richBlockStyles.wrap, isActive && richBlockStyles.wrapActive]}>
+        {isActive && <View style={[richBlockStyles.rail, { backgroundColor: "#C2185B" }]} />}
+        <Pressable onPress={() => onFocus(block.id)}>
+          <ImageBlock block={block} onUpdate={(updates) => onUpdateBlock(block.id, updates)} />
         </Pressable>
       </View>
     );
@@ -1529,6 +1665,7 @@ function FormattingToolbar({
       <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="always" contentContainerStyle={tbStyles.actionRow}>
         <ActionBtn label="+ Block" onPress={onAddBlock} />
         <ActionBtn label="+ Voice" onPress={() => onUpdateBlock({ type: "audio", text: "", audioUri: undefined, audioDurationMillis: undefined })} />
+        <ActionBtn label="+ Image" onPress={() => onUpdateBlock({ type: "image", text: "", imageUri: undefined })} />
         <ActionBtn label="Copy" onPress={onDuplicateBlock} />
         <ActionBtn label="↑" onPress={() => onMoveBlock(-1)} disabled={!canMoveUp} />
         <ActionBtn label="↓" onPress={() => onMoveBlock(1)} disabled={!canMoveDown} />
@@ -1734,7 +1871,7 @@ function NoteEditorModal({
 
   const activeBlock = blocks.find((b) => b.id === activeId) ?? null;
   const activeIndex = blocks.findIndex((b) => b.id === activeId);
-  const hasContent = !!title.trim() || blocks.some((b) => b.text.trim() || b.audioUri);
+  const hasContent = !!title.trim() || blocks.some((b) => b.text.trim() || b.audioUri || b.imageUri);
   const hasEmojiInBlock = containsEmoji(activeBlock?.text ?? "");
   const emojiScale = activeBlock?.emojiScale ?? 1.0;
 
@@ -2083,7 +2220,8 @@ function NoteCard({
 }) {
   const { t, isRTL, l } = useLanguage();
   const rich = note.richContent;
-  const previewBlocks = rich?.filter((block) => block.text.trim()).slice(0, 5) ?? [];
+  const previewBlocks = rich?.filter((block) => block.text.trim() && block.type !== "image").slice(0, 5) ?? [];
+  const images = rich?.filter((block) => block.type === "image" && block.imageUri) ?? [];
   const wordCount = note.text.trim().split(/\s+/).filter(Boolean).length;
   const noteTime = new Date(note.createdAt).toLocaleTimeString(isRTL ? "ar-SA" : "en-US", {
     hour: "numeric",
@@ -2169,6 +2307,28 @@ function NoteCard({
         </Text>
       )}
 
+      {images.length > 0 && (
+        <View
+          style={[
+            noteCardStyles.imagePreviewRow,
+            {
+              paddingRight: isRTL ? 0 : 32,
+              paddingLeft: isRTL ? 32 : 0,
+              flexDirection: isRTL ? "row-reverse" : "row",
+            },
+          ]}
+        >
+          {images.map((img) => (
+            <Image
+              key={img.id}
+              source={{ uri: img.imageUri }}
+              style={noteCardStyles.thumbnailSquare}
+              contentFit="cover"
+            />
+          ))}
+        </View>
+      )}
+
       <View style={[noteCardStyles.editHint, { alignItems: isRTL ? "flex-start" : "flex-end" }]}>
         <View style={noteCardStyles.editPill}>
           <Icon name="pencil" size={11} color="#7A5264" />
@@ -2227,6 +2387,18 @@ const noteCardStyles = StyleSheet.create({
   editHint: { marginTop: 10 },
   editPill: { alignItems: "center", backgroundColor: "rgba(255,255,255,0.42)", borderRadius: 14, flexDirection: "row", gap: 4, paddingHorizontal: 8, paddingVertical: 4 },
   editText: { color: "#7A5264", fontFamily: "Inter_600SemiBold", fontSize: 11 },
+  imagePreviewRow: {
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 10,
+  },
+  thumbnailSquare: {
+    width: 50,
+    height: 50,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.4)",
+  },
 });
 
 // ─── Notes section ────────────────────────────────────────────────────────────

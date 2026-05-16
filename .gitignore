@@ -73,3 +73,5 @@ local.properties
 # Internal tools/agents
 .agents/
 .config/
+artifacts/api-server/.env
+artifacts/api-server/.env
