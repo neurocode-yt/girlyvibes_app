@@ -22,7 +22,7 @@ export function FloatingEmojis() {
     // Spawn an emoji every 600ms
     const interval = setInterval(() => {
       const id = idCounter.current++;
-      
+
       const particle: Particle = {
         id,
         emoji: EMOJIS[Math.floor(Math.random() * EMOJIS.length)],

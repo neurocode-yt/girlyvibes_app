@@ -8,8 +8,17 @@ import React, {
 } from "react";
 
 import { ROUTINE_TEMPLATES, type RoutineTemplate } from "@/data/routines";
-
-const STORAGE_KEY = "girlyvibes_app_data";
+import { useAuth } from "@/contexts/AuthContext";
+import { 
+  syncProfileToCloud, 
+  syncNoteToCloud, 
+  deleteNoteFromCloud, 
+  syncEntryToCloud, 
+  deleteEntryFromCloud, 
+  syncRoutineToCloud, 
+  deleteRoutineFromCloud,
+  fetchCloudData 
+} from "@/lib/sync";
 
 interface RoutineProgress {
   [routineId: string]: {
@@ -43,18 +52,24 @@ export interface DiaryEntry {
   moodEmoji: string; // the actual emoji
   note: string;
   cardColor: string; // hex
+  updatedAt?: number;
 }
 
 export interface RichBlock {
   id: string;
   text: string;
-  type: 'h1' | 'h2' | 'h3' | 'body' | 'small' | 'bullet' | 'audio';
+  type: 'h1' | 'h2' | 'h3' | 'body' | 'small' | 'bullet' | 'audio' | 'image';
   bold: boolean;
   italic: boolean;
   underline: boolean;
   color: string;
   fontStyle: 'sans' | 'soft' | 'serif' | 'mono' | 'hand' | 'fancy';
   audioUri?: string;
+  imageUri?: string;
+  audioStoragePath?: string;
+  imageStoragePath?: string;
+  mediaBucket?: string;
+  mimeType?: string;
   audioDurationMillis?: number;
   bulletSymbol?: string;
   emojiScale?: number; // 1.0–3.0, default 1
@@ -68,9 +83,10 @@ export interface DiaryNote {
   color: string;     // hex card color
   title?: string;    // note title
   createdAt: number; // ms timestamp
+  updatedAt?: number;
 }
 
-interface AppData {
+export interface AppData {
   streak: number;
   lastStreakDate: string | null;
   totalRoutinesCompleted: number;
@@ -81,8 +97,10 @@ interface AppData {
   favoriteAdvice: string[];
   profileName: string;
   profilePhoto: string | null;
+  profilePhotoStoragePath?: string | null;
   favoriteRoutineId: string | null;
   visionBoardImage: string | null;
+  visionBoardStoragePath?: string | null;
   visionBoardMode: VisionBoardMode;
   diaryEntries: { [dateKey: string]: DiaryEntry };
   diaryNotes: DiaryNote[];
@@ -119,6 +137,7 @@ interface AppContextType {
   getDetoxDaysCompleted: () => number;
   toggleFavoriteAdvice: (cardId: string) => Promise<void>;
   isFavorite: (cardId: string) => boolean;
+  clearData: () => Promise<void>;
 }
 
 const DEFAULT_DATA: AppData = {
@@ -142,8 +161,10 @@ const DEFAULT_DATA: AppData = {
   favoriteAdvice: [],
   profileName: "",
   profilePhoto: null,
+  profilePhotoStoragePath: null,
   favoriteRoutineId: null,
   visionBoardImage: null,
+  visionBoardStoragePath: null,
   visionBoardMode: "square",
   diaryEntries: {},
   diaryNotes: [],
@@ -152,69 +173,176 @@ const DEFAULT_DATA: AppData = {
 
 const AppContext = createContext<AppContextType | null>(null);
 
+function normalizeAppData(raw: Partial<AppData> | null | undefined): AppData {
+  const parsed = raw ?? {};
+  return {
+    ...DEFAULT_DATA,
+    ...parsed,
+    glowUpProgress: {
+      ...DEFAULT_DATA.glowUpProgress,
+      ...(parsed.glowUpProgress ?? {}),
+    },
+    detoxChallenge: {
+      ...DEFAULT_DATA.detoxChallenge,
+      ...(parsed.detoxChallenge ?? {}),
+    },
+    favoriteAdvice: parsed.favoriteAdvice ?? [],
+    favoriteRoutineId: parsed.favoriteRoutineId ?? null,
+    visionBoardImage: parsed.visionBoardImage ?? null,
+    visionBoardStoragePath: parsed.visionBoardStoragePath ?? null,
+    visionBoardMode: parsed.visionBoardMode ?? "square",
+    profilePhotoStoragePath: parsed.profilePhotoStoragePath ?? null,
+    diaryEntries: parsed.diaryEntries ?? {},
+    diaryNotes: parsed.diaryNotes ?? [],
+    customRoutines: parsed.customRoutines ?? [],
+  };
+}
+
+function itemStamp(item: { updatedAt?: number; createdAt?: number }) {
+  return item.updatedAt ?? item.createdAt ?? 0;
+}
+
+function mergeByNewest<T extends { id: string; updatedAt?: number; createdAt?: number }>(
+  localItems: T[],
+  cloudItems: T[],
+) {
+  const merged = new Map<string, T>();
+  for (const item of [...localItems, ...cloudItems]) {
+    const existing = merged.get(item.id);
+    if (!existing || itemStamp(item) >= itemStamp(existing)) {
+      merged.set(item.id, item);
+    }
+  }
+  return Array.from(merged.values());
+}
+
+function mergeEntries(
+  localEntries: AppData["diaryEntries"],
+  cloudEntries: AppData["diaryEntries"],
+) {
+  const merged: AppData["diaryEntries"] = { ...localEntries };
+  for (const [id, cloudEntry] of Object.entries(cloudEntries)) {
+    const localEntry = merged[id];
+    if (!localEntry || itemStamp(cloudEntry) >= itemStamp(localEntry)) {
+      merged[id] = cloudEntry;
+    }
+  }
+  return merged;
+}
+
+function mergeCloudData(localData: AppData, cloudData: Partial<AppData> | null) {
+  if (!cloudData) return localData;
+
+  const normalizedCloud = normalizeAppData(cloudData);
+  return {
+    ...localData,
+    ...normalizedCloud,
+    streak: Math.max(localData.streak ?? 0, normalizedCloud.streak ?? 0),
+    totalRoutinesCompleted: Math.max(
+      localData.totalRoutinesCompleted ?? 0,
+      normalizedCloud.totalRoutinesCompleted ?? 0,
+    ),
+    lastStreakDate: normalizedCloud.lastStreakDate ?? localData.lastStreakDate,
+    favoriteRoutineId: normalizedCloud.favoriteRoutineId ?? localData.favoriteRoutineId,
+    visionBoardImage: normalizedCloud.visionBoardImage ?? localData.visionBoardImage,
+    visionBoardStoragePath: normalizedCloud.visionBoardStoragePath ?? localData.visionBoardStoragePath,
+    profileName: normalizedCloud.profileName || localData.profileName,
+    profilePhoto: normalizedCloud.profilePhoto ?? localData.profilePhoto,
+    profilePhotoStoragePath: normalizedCloud.profilePhotoStoragePath ?? localData.profilePhotoStoragePath,
+    diaryNotes: mergeByNewest(localData.diaryNotes ?? [], normalizedCloud.diaryNotes ?? []),
+    diaryEntries: mergeEntries(localData.diaryEntries ?? {}, normalizedCloud.diaryEntries ?? {}),
+    customRoutines: mergeByNewest(
+      localData.customRoutines.map((routine) => ({ ...routine, updatedAt: 0 })),
+      normalizedCloud.customRoutines.map((routine) => ({ ...routine, updatedAt: 1 })),
+    ).map(({ updatedAt: _updatedAt, ...routine }) => routine),
+    favoriteAdvice: Array.from(
+      new Set([...(localData.favoriteAdvice ?? []), ...(normalizedCloud.favoriteAdvice ?? [])]),
+    ),
+  };
+}
+
 export function AppProvider({ children }: { children: React.ReactNode }) {
+  const { session } = useAuth();
+  const userId = session?.user?.id || "local";
+  const STORAGE_KEY = `girlyvibes_app_data_${userId}`;
+
   const [data, setData] = useState<AppData>(DEFAULT_DATA);
 
   useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEY).then((raw) => {
-          if (raw) {
+    let cancelled = false;
+    setData({ ...DEFAULT_DATA, lastRoutineResetDate: new Date().toDateString() }); // Clear memory before loading
+    
+    AsyncStorage.getItem(STORAGE_KEY).then(async (raw) => {
+      let localData: AppData = { ...DEFAULT_DATA };
+      if (raw) {
         try {
-          const parsed = JSON.parse(raw);
-          const parsedData: AppData = {
-            ...DEFAULT_DATA,
-            ...parsed,
-            glowUpProgress: {
-              ...DEFAULT_DATA.glowUpProgress,
-              ...(parsed.glowUpProgress ?? {}),
-            },
-            detoxChallenge: {
-              ...DEFAULT_DATA.detoxChallenge,
-              ...(parsed.detoxChallenge ?? {}),
-            },
-            favoriteAdvice: parsed.favoriteAdvice ?? [],
-            favoriteRoutineId: parsed.favoriteRoutineId ?? null,
-            visionBoardImage: parsed.visionBoardImage ?? null,
-            visionBoardMode: parsed.visionBoardMode ?? "square",
-            diaryEntries: parsed.diaryEntries ?? {},
-            diaryNotes: parsed.diaryNotes ?? [],
-            customRoutines: parsed.customRoutines ?? [],
-          };
-          const today = new Date().toDateString();
-          let needsSave = false;
-
-          // Daily reset for routines
-          if (parsedData.lastRoutineResetDate !== today) {
-            parsedData.routineProgress = {};
-            parsedData.completedRoutines = {};
-            parsedData.lastRoutineResetDate = today;
-            needsSave = true;
-          }
-
-          setData(parsedData);
-          
-          if (needsSave) {
-            AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(parsedData));
-          }
+          localData = normalizeAppData(JSON.parse(raw));
         } catch {
           // ignore
         }
-      } else {
-        // First launch, set today as reset date
-        const initial = { ...DEFAULT_DATA, lastRoutineResetDate: new Date().toDateString() };
-        setData(initial);
-        AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(initial));
+      }
+
+      let parsedData = localData;
+      if (session?.user?.id) {
+        const cloudData = await fetchCloudData(session.user.id);
+        parsedData = mergeCloudData(localData, cloudData);
+      }
+
+      const today = new Date().toDateString();
+      let needsSave = false;
+
+      // Daily reset for routines
+      if (parsedData.lastRoutineResetDate !== today) {
+        parsedData.routineProgress = {};
+        parsedData.completedRoutines = {};
+        parsedData.lastRoutineResetDate = today;
+        needsSave = true;
+      }
+
+      if (cancelled) return;
+      setData(parsedData);
+      
+      if (needsSave || !raw || session?.user?.id) {
+        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(parsedData));
+      }
+
+      if (session?.user?.id) {
+        syncProfileToCloud(session.user.id, parsedData);
+        parsedData.diaryNotes.forEach((note) => syncNoteToCloud(session.user.id, note));
+        Object.values(parsedData.diaryEntries).forEach((entry) =>
+          syncEntryToCloud(session.user.id, entry),
+        );
+        parsedData.customRoutines.forEach((routine) =>
+          syncRoutineToCloud(session.user.id, routine),
+        );
       }
     });
-  }, []);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [STORAGE_KEY, session?.user?.id]);
 
   const save = useCallback(async (newData: AppData) => {
     setData(newData);
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(newData));
-  }, []);
+    if (userId !== "local") {
+      const syncedData = await syncProfileToCloud(userId, newData);
+      if (syncedData) {
+        setData(syncedData);
+        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(syncedData));
+      }
+    }
+  }, [STORAGE_KEY, userId]);
 
   const updateProfile = useCallback(
     async (name: string, photo: string | null) => {
-      await save({ ...data, profileName: name, profilePhoto: photo });
+      await save({
+        ...data,
+        profileName: name,
+        profilePhoto: photo,
+        profilePhotoStoragePath: photo === data.profilePhoto ? data.profilePhotoStoragePath : null,
+      });
     },
     [data, save]
   );
@@ -228,7 +356,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const updateVisionBoard = useCallback(
     async (imageUri: string | null, mode: VisionBoardMode = data.visionBoardMode ?? "square") => {
-      await save({ ...data, visionBoardImage: imageUri, visionBoardMode: mode });
+      await save({
+        ...data,
+        visionBoardImage: imageUri,
+        visionBoardMode: mode,
+        visionBoardStoragePath: imageUri === data.visionBoardImage ? data.visionBoardStoragePath : null,
+      });
     },
     [data, save]
   );
@@ -483,12 +616,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const saveDiaryEntry = useCallback(
     async (entry: DiaryEntry) => {
+      const stampedEntry = { ...entry, updatedAt: Date.now() };
       await save({
         ...data,
-        diaryEntries: { ...data.diaryEntries, [entry.id]: entry },
+        diaryEntries: { ...data.diaryEntries, [entry.id]: stampedEntry },
       });
+      if (userId !== "local") syncEntryToCloud(userId, stampedEntry);
     },
-    [data, save]
+    [data, save, userId]
   );
 
   const deleteDiaryEntry = useCallback(
@@ -496,37 +631,66 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const updated = { ...data.diaryEntries };
       delete updated[dateKey];
       await save({ ...data, diaryEntries: updated });
+      if (userId !== "local") deleteEntryFromCloud(userId, dateKey);
     },
-    [data, save]
+    [data, save, userId]
   );
 
   const saveNote = useCallback(
     async (note: DiaryNote) => {
+      const stampedNote = { ...note, updatedAt: Date.now() };
       const existing = data.diaryNotes ?? [];
-      const next = existing.some((n) => n.id === note.id)
-        ? existing.map((n) => (n.id === note.id ? note : n))
-        : [...existing, note];
-      await save({ ...data, diaryNotes: next });
+      const next = existing.some((n) => n.id === stampedNote.id)
+        ? existing.map((n) => (n.id === stampedNote.id ? stampedNote : n))
+        : [...existing, stampedNote];
+      const nextData = { ...data, diaryNotes: next };
+      await save(nextData);
+      if (userId !== "local") {
+        const syncedNote = await syncNoteToCloud(userId, stampedNote);
+        if (syncedNote) {
+          const syncedData = {
+            ...nextData,
+            diaryNotes: next.map((n) => (n.id === syncedNote.id ? syncedNote : n)),
+          };
+          setData(syncedData);
+          await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(syncedData));
+        }
+      }
     },
-    [data, save]
+    [STORAGE_KEY, data, save, userId]
   );
 
   const deleteNote = useCallback(
     async (noteId: string) => {
       const updated = (data.diaryNotes ?? []).filter((n) => n.id !== noteId);
       await save({ ...data, diaryNotes: updated });
+      if (userId !== "local") deleteNoteFromCloud(userId, noteId);
     },
-    [data, save]
+    [data, save, userId]
   );
 
   const updateNote = useCallback(
     async (noteId: string, text: string, color: string, richContent?: RichBlock[], title?: string) => {
+      const updatedNoteInfo = { text, color, title, updatedAt: Date.now(), ...(richContent ? { richContent } : {}) };
       const updated = (data.diaryNotes ?? []).map((n) =>
-        n.id === noteId ? { ...n, text, color, title, ...(richContent ? { richContent } : {}) } : n
+        n.id === noteId ? { ...n, ...updatedNoteInfo } : n
       );
-      await save({ ...data, diaryNotes: updated });
+      const nextData = { ...data, diaryNotes: updated };
+      await save(nextData);
+      const fullNote = updated.find(n => n.id === noteId);
+      if (userId !== "local" && fullNote) {
+        const syncedNote = await syncNoteToCloud(userId, fullNote);
+        if (syncedNote) {
+          const syncedData = {
+            ...nextData,
+            diaryNotes: updated.map((n) => (n.id === syncedNote.id ? syncedNote : n)),
+          };
+          setData(syncedData);
+          await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(syncedData));
+        }
+      }
     },
-    [data, save]
+    [STORAGE_KEY, data, save, userId]
   );
 
   const saveUserRoutine = useCallback(
@@ -536,8 +700,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         ? existing.map((item) => (item.id === routine.id ? routine : item))
         : [...existing, routine];
       await save({ ...data, customRoutines: next });
+      if (userId !== "local") syncRoutineToCloud(userId, routine);
     },
-    [data, save]
+    [data, save, userId]
   );
 
   const deleteUserRoutine = useCallback(
@@ -558,9 +723,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             ? null
             : data.favoriteRoutineId,
       });
+      if (userId !== "local") deleteRoutineFromCloud(userId, routineId);
     },
-    [data, save]
+    [data, save, userId]
   );
+
+  const clearData = useCallback(async () => {
+    const initial = { ...DEFAULT_DATA, lastRoutineResetDate: new Date().toDateString() };
+    setData(initial);
+    // Note: We no longer delete from AsyncStorage here so we don't lose the user's data!
+    // We just clear the local React memory so the app feels fresh until they log back in.
+  }, []);
 
   return (
     <AppContext.Provider
@@ -593,6 +766,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         getDetoxDaysCompleted,
         toggleFavoriteAdvice,
         isFavorite,
+        clearData,
       }}
     >
       {children}

@@ -2,7 +2,7 @@ import { AppMaterialCommunityIcons as MaterialCommunityIcons } from "@/component
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import React from "react";
+import React, { useEffect } from "react";
 import {
   Platform,
   Pressable,
@@ -18,6 +18,7 @@ import { GLOW_UP_PLANS } from "@/data/glowupPlans";
 import { ROUTINE_TEMPLATES } from "@/data/routines";
 import { useColors } from "@/hooks/useColors";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { supabase } from "@/lib/supabase";
 
 function StatBlock({
   icon,
@@ -39,13 +40,30 @@ function StatBlock({
     </View>
   );
 }
+// import { supabase } from '@/lib/supabase';
+
+// async function testAnonymousAuth() {
+//   const { data, error } = await supabase.auth.signInAnonymously();
+
+//   if (error) {
+//     console.log('Supabase Auth error:', error.message);
+//     return;
+//   }
+
+//   console.log('Anonymous user created:', data.user?.id);
+// }
+
 
 export function ProfileContent({ showBackButton = true }: { showBackButton?: boolean }) {
+
+  // useEffect(() => {
+  //   testAnonymousAuth();
+  // }, []);
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { t, l, isRTL, toggleLanguage } = useLanguage();
-  const { data, getRoutineCompletionPercent } = useApp();
+  const { data, getRoutineCompletionPercent, clearData } = useApp();
 
   const topInset = Platform.OS === "web" ? 67 : insets.top;
 
@@ -227,6 +245,19 @@ export function ProfileContent({ showBackButton = true }: { showBackButton?: boo
             );
           })}
         </View>
+
+        <Pressable
+          style={[styles.logoutBtn, { borderColor: colors.border }]}
+          onPress={async () => {
+            await clearData();
+            await supabase.auth.signOut();
+          }}
+        >
+          <MaterialCommunityIcons name="logout" size={20} color={colors.primary} />
+          <Text style={[styles.logoutText, { color: colors.foreground }]}>
+            {l("تسجيل الخروج", "Log Out")}
+          </Text>
+        </Pressable>
       </View>
     </ScrollView>
   );
@@ -294,4 +325,19 @@ const styles = StyleSheet.create({
   routineIcon: { width: 38, height: 38, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   routineName: { fontSize: 14, fontFamily: "Inter_500Medium" },
   pctText: { fontSize: 13, fontFamily: "Inter_700Bold", marginLeft: 10 },
+  logoutBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginTop: 24,
+    paddingVertical: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    backgroundColor: "transparent",
+  },
+  logoutText: {
+    fontSize: 15,
+    fontFamily: "Inter_600SemiBold",
+  },
 });
