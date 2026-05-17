@@ -17,6 +17,8 @@ import { HoldEmojiBurst } from "@/components/HoldEmojiBurst";
 import { AppProvider } from "@/contexts/AppContext";
 import { getStoredLang, LanguageProvider } from "@/contexts/LanguageContext";
 import { Lang } from "@/constants/i18n";
+import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { AuthScreen } from "@/components/AuthScreen";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -31,6 +33,13 @@ function RootLayoutNav() {
       <Stack.Screen name="settings" options={{ headerShown: false, presentation: "modal" }} />
     </Stack>
   );
+}
+
+function RootContent() {
+  const { session, isReady } = useAuth();
+  if (!isReady) return null;
+  if (!session) return <AuthScreen />;
+  return <RootLayoutNav />;
 }
 
 export default function RootLayout() {
@@ -78,11 +87,13 @@ export default function RootLayout() {
         <QueryClientProvider client={queryClient}>
           <GestureHandlerRootView style={{ flex: 1 }}>
             <LanguageProvider initialLang={lang ?? "ar"}>
-              <AppProvider>
-                <HoldEmojiBurst>
-                  <RootLayoutNav />
-                </HoldEmojiBurst>
-              </AppProvider>
+              <AuthProvider>
+                <AppProvider>
+                  <HoldEmojiBurst>
+                    <RootContent />
+                  </HoldEmojiBurst>
+                </AppProvider>
+              </AuthProvider>
             </LanguageProvider>
           </GestureHandlerRootView>
         </QueryClientProvider>

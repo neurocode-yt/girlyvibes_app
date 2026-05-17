@@ -73,3 +73,12 @@ local.properties
 # Internal tools/agents
 .agents/
 .config/
+artifacts/api-server/.env
+
+# Local environment files
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
