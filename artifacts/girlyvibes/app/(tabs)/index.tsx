@@ -391,11 +391,16 @@ export default function HomeScreen() {
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: getPickerAspect(visionMode),
-      quality: 0.86,
+      quality: 0.72,
+      base64: true,
     });
 
     if (!result.canceled && result.assets[0]) {
-      await updateVisionBoard(result.assets[0].uri, visionMode);
+      const asset = result.assets[0];
+      const visionUri = asset.base64
+        ? `data:${asset.mimeType || 'image/jpeg'};base64,${asset.base64}`
+        : asset.uri;
+      await updateVisionBoard(visionUri, visionMode);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
   };

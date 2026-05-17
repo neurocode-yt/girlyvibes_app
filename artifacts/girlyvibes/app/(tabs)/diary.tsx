@@ -7,12 +7,11 @@ import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import * as ImagePicker from "expo-image-picker";
-import * as FileSystem from "expo-file-system";
-import * as ImageManipulator from "expo-image-manipulator";
 import { Image } from "expo-image";
 import {
   Alert,
   Animated,
+  DeviceEventEmitter,
   Dimensions,
   KeyboardAvoidingView,
   Modal,
@@ -856,6 +855,12 @@ function makeBlock(o?: Partial<RichBlock>): RichBlock {
   return { id: `b${Date.now()}${++_bc}`, text: "", type: "body", bold: false, italic: false, underline: false, color: "#222222", fontStyle: "sans", ...o };
 }
 
+function pickedImageToDataUri(asset: ImagePicker.ImagePickerAsset) {
+  return asset.base64
+    ? `data:${asset.mimeType || 'image/jpeg'};base64,${asset.base64}`
+    : asset.uri;
+}
+
 function serializeNoteDraft(title: string, color: string, blocks: RichBlock[]) {
   return JSON.stringify({
     title: title.trim(),
@@ -1176,16 +1181,18 @@ function ImageBlock({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [1, 1],
-      quality: 0.8,
+      quality: 0.65,
+      base64: true,
     });
 
     if (!result.canceled && result.assets && result.assets.length > 0) {
-      const uri = result.assets[0].uri;
+      const asset = result.assets[0];
+      const uri = pickedImageToDataUri(asset);
       onUpdate({
         imageStoragePath: undefined,
         imageUri: uri,
         mediaBucket: undefined,
-        mimeType: result.assets[0].mimeType,
+        mimeType: asset.mimeType || 'image/jpeg',
         text: "",
       });
     }
@@ -1826,7 +1833,7 @@ function NoteEditorModal({
 }: {
   visible: boolean;
   initialNote: DiaryNote | null;
-  onSave: (text: string, color: string, richContent: RichBlock[], title?: string) => void;
+  onSave: (text: string, color: string, richContent: RichBlock[], title?: string) => void | Promise<void>;
   onClose: () => void;
 }) {
   const insets = useSafeAreaInsets();
@@ -1835,6 +1842,7 @@ function NoteEditorModal({
   const [blocks, setBlocks] = useState<RichBlock[]>(() => [makeBlock()]);
   const [activeId, setActiveId] = useState("");
   const [noteColor, setNoteColor] = useState(NOTE_COLORS[0]);
+  const [isSaving, setIsSaving] = useState(false);
   const [savePromptVisible, setSavePromptVisible] = useState(false);
   const blockRefs = useRef<{ [id: string]: TextInput | null }>({});
   const titleRef = useRef<TextInput | null>(null);
@@ -1844,6 +1852,7 @@ function NoteEditorModal({
     if (!visible) return;
     setTitle(initialNote?.title ?? "");
     setNoteColor(initialNote?.color ?? NOTE_COLORS[0]);
+    setIsSaving(false);
     if (initialNote?.richContent?.length) {
       const nb = initialNote.richContent;
       setBlocks(nb);
@@ -1965,12 +1974,18 @@ function NoteEditorModal({
     setTimeout(() => blockRefs.current[prev.id]?.focus(), 30);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    if (isSaving || !hasContent) return;
+    setIsSaving(true);
     const normalizedBlocks = blocks.length
       ? blocks
       : [makeBlock()];
     const text = normalizedBlocks.map((b) => b.text).join("\n").trim();
-    onSave(text, noteColor, normalizedBlocks, title.trim());
+    try {
+      await onSave(text, noteColor, normalizedBlocks, title.trim());
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleCloseRequest = () => {
@@ -1995,13 +2010,13 @@ function NoteEditorModal({
             {initialNote ? t.diary.editEntry : t.diary.addNote}
           </Text>
           <Pressable
-            style={[editorStyles.saveBtn, { backgroundColor: hasContent ? "#33333324" : "#33333308" }]}
-            onPress={hasContent ? handleSave : undefined}
-            disabled={!hasContent}
+            style={[editorStyles.saveBtn, { backgroundColor: hasContent && !isSaving ? "#33333324" : "#33333308" }]}
+            onPress={hasContent && !isSaving ? handleSave : undefined}
+            disabled={!hasContent || isSaving}
             hitSlop={10}
           >
-            <Text style={[editorStyles.saveBtnTxt, { color: hasContent ? "#333" : "#aaa" }]}>
-              {t.diary.saveEntry}
+            <Text style={[editorStyles.saveBtnTxt, { color: hasContent && !isSaving ? "#333" : "#aaa" }]}>
+              {isSaving ? l("جاري الحفظ...", "Saving...") : t.diary.saveEntry}
             </Text>
           </Pressable>
         </View>
@@ -2087,13 +2102,15 @@ function NoteEditorModal({
                   <Text style={editorStyles.promptNoText}>{l("لا", "No")}</Text>
                 </Pressable>
                 <Pressable
-                  style={editorStyles.promptSaveBtn}
+                  style={[editorStyles.promptSaveBtn, isSaving && { opacity: 0.5 }]}
                   onPress={() => {
+                    if (isSaving) return;
                     setSavePromptVisible(false);
                     handleSave();
                   }}
+                  disabled={isSaving}
                 >
-                  <Text style={editorStyles.promptSaveText}>{l("حفظ", "Save")}</Text>
+                  <Text style={editorStyles.promptSaveText}>{isSaving ? l("جاري الحفظ...", "Saving...") : l("حفظ", "Save")}</Text>
                 </Pressable>
               </View>
             </View>
@@ -2908,6 +2925,267 @@ const notesSectionStyles = StyleSheet.create({
 
 // ─── Main screen ─────────────────────────────────────────────────────────────
 
+function SecretDiaryModal({
+  visible,
+  onClose,
+}: {
+  visible: boolean;
+  onClose: () => void;
+}) {
+  const colors = useColors();
+  const insets = useSafeAreaInsets();
+  const { data, setSecretDiaryPin, saveSecretNote, updateSecretNote, deleteSecretNote } = useApp();
+  const [pinInput, setPinInput] = useState("");
+  const [error, setError] = useState("");
+  const [unlocked, setUnlocked] = useState(false);
+  const [editorVisible, setEditorVisible] = useState(false);
+  const [editingNote, setEditingNote] = useState<DiaryNote | null>(null);
+  const [changingPin, setChangingPin] = useState(false);
+  const [newPin, setNewPin] = useState("");
+  const [confirmPin, setConfirmPin] = useState("");
+  const [pinChangeMessage, setPinChangeMessage] = useState("");
+
+  const hasPin = !!data.secretDiaryPin;
+  const notes = [...(data.secretDiaryNotes ?? [])].sort((a, b) => (b.updatedAt ?? b.createdAt) - (a.updatedAt ?? a.createdAt));
+
+  useEffect(() => {
+    if (!visible) {
+      setPinInput("");
+      setError("");
+      setUnlocked(false);
+      setEditorVisible(false);
+      setEditingNote(null);
+      setChangingPin(false);
+      setNewPin("");
+      setConfirmPin("");
+      setPinChangeMessage("");
+    }
+  }, [visible]);
+
+  const submitPin = async () => {
+    const pin = pinInput.trim();
+    if (!/^\d{4}$/.test(pin)) {
+      setError("Enter a 4 digit PIN.");
+      return;
+    }
+
+    if (!hasPin) {
+      await setSecretDiaryPin(pin);
+      setUnlocked(true);
+      setPinInput("");
+      return;
+    }
+
+    if (pin !== data.secretDiaryPin) {
+      setError("Wrong PIN.");
+      return;
+    }
+
+    setUnlocked(true);
+    setPinInput("");
+  };
+
+  const openNew = () => {
+    setEditingNote(null);
+    setEditorVisible(true);
+  };
+
+  const openEdit = (note: DiaryNote) => {
+    setEditingNote(note);
+    setEditorVisible(true);
+  };
+
+  const handleSave = async (text: string, color: string, richContent: RichBlock[], title?: string) => {
+    if (editingNote) {
+      await updateSecretNote(editingNote.id, text, color, richContent, title);
+    } else {
+      const now = Date.now();
+      await saveSecretNote({
+        id: `secret-${todayKey()}-${now}`,
+        date: todayKey(),
+        text,
+        richContent,
+        color,
+        title,
+        createdAt: now,
+      });
+    }
+    setEditorVisible(false);
+    setEditingNote(null);
+  };
+
+  const handleDelete = (noteId: string) => {
+    if (Platform.OS === "web") {
+      deleteSecretNote(noteId);
+      return;
+    }
+    Alert.alert("Delete private note?", "", [
+      { text: "Cancel", style: "cancel" },
+      { text: "Delete", style: "destructive", onPress: () => deleteSecretNote(noteId) },
+    ]);
+  };
+
+  const changePin = async () => {
+    if (!/^\d{4}$/.test(newPin)) {
+      setPinChangeMessage("New PIN must be 4 digits.");
+      return;
+    }
+    if (newPin !== confirmPin) {
+      setPinChangeMessage("PINs do not match.");
+      return;
+    }
+    await setSecretDiaryPin(newPin);
+    setChangingPin(false);
+    setNewPin("");
+    setConfirmPin("");
+    setPinChangeMessage("PIN updated.");
+  };
+
+  return (
+    <Modal visible={visible} animationType="slide" statusBarTranslucent onRequestClose={onClose}>
+      <View style={[secretStyles.root, { backgroundColor: colors.background, paddingTop: insets.top + 14 }]}>
+        <NoteEditorModal
+          visible={editorVisible}
+          initialNote={editingNote}
+          onSave={handleSave}
+          onClose={() => {
+            setEditorVisible(false);
+            setEditingNote(null);
+          }}
+        />
+
+        <View style={secretStyles.header}>
+          <Pressable style={secretStyles.closeBtn} onPress={onClose}>
+            <Icon name="arrow-left" size={22} color="#333" />
+          </Pressable>
+          <Text style={[secretStyles.title, { color: colors.foreground }]}>Private Diary</Text>
+          {unlocked ? (
+            <Pressable style={[secretStyles.addBtn, { backgroundColor: colors.primary }]} onPress={openNew}>
+              <Icon name="plus" size={18} color="#fff" />
+            </Pressable>
+          ) : (
+            <View style={secretStyles.addBtnPlaceholder} />
+          )}
+        </View>
+
+        {!unlocked ? (
+          <View style={secretStyles.pinWrap}>
+            <Text style={[secretStyles.pinTitle, { color: colors.foreground }]}>
+              {hasPin ? "Enter your private PIN" : "Create your private PIN"}
+            </Text>
+            <TextInput
+              value={pinInput}
+              onChangeText={(value) => {
+                setError("");
+                setPinInput(value.replace(/\D/g, "").slice(0, 4));
+              }}
+              keyboardType="number-pad"
+              secureTextEntry
+              maxLength={4}
+              placeholder="0000"
+              placeholderTextColor="#aaa"
+              style={[secretStyles.pinInput, { borderColor: colors.border, color: colors.foreground }]}
+            />
+            {!!error && <Text style={secretStyles.errorText}>{error}</Text>}
+            <Pressable style={[secretStyles.unlockBtn, { backgroundColor: colors.primary }]} onPress={submitPin}>
+              <Text style={secretStyles.unlockText}>{hasPin ? "Unlock" : "Save PIN"}</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <ScrollView contentContainerStyle={secretStyles.notesWrap} showsVerticalScrollIndicator={false}>
+            <View style={[secretStyles.pinChangeCard, { borderColor: colors.border }]}>
+              <Pressable
+                style={secretStyles.changePinHeader}
+                onPress={() => {
+                  setChangingPin((value) => !value);
+                  setPinChangeMessage("");
+                }}
+              >
+                <Text style={[secretStyles.changePinText, { color: colors.foreground }]}>Change 4 digit PIN</Text>
+                <Icon name={changingPin ? "chevron-up" : "chevron-down"} size={20} color={colors.primary} />
+              </Pressable>
+              {changingPin && (
+                <View style={secretStyles.pinChangeFields}>
+                  <TextInput
+                    value={newPin}
+                    onChangeText={(value) => {
+                      setPinChangeMessage("");
+                      setNewPin(value.replace(/\D/g, "").slice(0, 4));
+                    }}
+                    keyboardType="number-pad"
+                    secureTextEntry
+                    maxLength={4}
+                    placeholder="New PIN"
+                    placeholderTextColor="#aaa"
+                    style={[secretStyles.smallPinInput, { borderColor: colors.border, color: colors.foreground }]}
+                  />
+                  <TextInput
+                    value={confirmPin}
+                    onChangeText={(value) => {
+                      setPinChangeMessage("");
+                      setConfirmPin(value.replace(/\D/g, "").slice(0, 4));
+                    }}
+                    keyboardType="number-pad"
+                    secureTextEntry
+                    maxLength={4}
+                    placeholder="Confirm PIN"
+                    placeholderTextColor="#aaa"
+                    style={[secretStyles.smallPinInput, { borderColor: colors.border, color: colors.foreground }]}
+                  />
+                  <Pressable style={[secretStyles.savePinBtn, { backgroundColor: colors.primary }]} onPress={changePin}>
+                    <Text style={secretStyles.savePinText}>Save PIN</Text>
+                  </Pressable>
+                </View>
+              )}
+              {!!pinChangeMessage && <Text style={secretStyles.pinChangeMessage}>{pinChangeMessage}</Text>}
+            </View>
+            {notes.length === 0 ? (
+              <Pressable style={[secretStyles.emptyCard, { borderColor: colors.border }]} onPress={openNew}>
+                <Text style={[secretStyles.emptyText, { color: colors.mutedForeground }]}>No private notes yet.</Text>
+              </Pressable>
+            ) : (
+              notes.map((note) => (
+                <NoteCard
+                  key={note.id}
+                  note={note}
+                  onPress={() => openEdit(note)}
+                  onDelete={() => handleDelete(note.id)}
+                />
+              ))
+            )}
+          </ScrollView>
+        )}
+      </View>
+    </Modal>
+  );
+}
+
+const secretStyles = StyleSheet.create({
+  root: { flex: 1 },
+  header: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 14 },
+  closeBtn: { alignItems: "center", backgroundColor: "rgba(0,0,0,0.08)", borderRadius: 20, height: 40, justifyContent: "center", width: 40 },
+  title: { fontFamily: "Inter_700Bold", fontSize: 22 },
+  addBtn: { alignItems: "center", borderRadius: 20, height: 40, justifyContent: "center", width: 40 },
+  addBtnPlaceholder: { height: 40, width: 40 },
+  pinWrap: { flex: 1, justifyContent: "center", paddingHorizontal: 30 },
+  pinTitle: { fontFamily: "Inter_700Bold", fontSize: 22, marginBottom: 18, textAlign: "center" },
+  pinInput: { borderRadius: 18, borderWidth: 1, fontFamily: "Inter_700Bold", fontSize: 26, letterSpacing: 8, paddingHorizontal: 18, paddingVertical: 14, textAlign: "center" },
+  errorText: { color: "#C2185B", fontFamily: "Inter_600SemiBold", marginTop: 10, textAlign: "center" },
+  unlockBtn: { alignItems: "center", borderRadius: 18, marginTop: 16, padding: 15 },
+  unlockText: { color: "#fff", fontFamily: "Inter_700Bold", fontSize: 15 },
+  notesWrap: { paddingBottom: 120, paddingHorizontal: 16 },
+  pinChangeCard: { borderRadius: 20, borderWidth: 1, marginBottom: 14, padding: 14 },
+  changePinHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
+  changePinText: { fontFamily: "Inter_700Bold", fontSize: 14 },
+  pinChangeFields: { gap: 10, marginTop: 12 },
+  smallPinInput: { borderRadius: 14, borderWidth: 1, fontFamily: "Inter_600SemiBold", fontSize: 15, paddingHorizontal: 12, paddingVertical: 10 },
+  savePinBtn: { alignItems: "center", borderRadius: 14, padding: 12 },
+  savePinText: { color: "#fff", fontFamily: "Inter_700Bold", fontSize: 14 },
+  pinChangeMessage: { color: "#C2185B", fontFamily: "Inter_600SemiBold", fontSize: 12, marginTop: 10 },
+  emptyCard: { alignItems: "center", borderRadius: 22, borderStyle: "dashed", borderWidth: 1, marginTop: 20, padding: 28 },
+  emptyText: { fontFamily: "Inter_500Medium", fontSize: 14 },
+});
+
 export default function DiaryScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -2915,10 +3193,32 @@ export default function DiaryScreen() {
   const { data } = useApp();
   const [selectedEntryDate, setSelectedEntryDate] = useState<string | null>(null);
   const [requestedNoteDate, setRequestedNoteDate] = useState<string | null>(null);
+  const [secretTapCount, setSecretTapCount] = useState(0);
+  const [secretDiaryVisible, setSecretDiaryVisible] = useState(false);
   const topInset = Platform.OS === "web" ? 67 : insets.top;
 
   const entries = data.diaryEntries ?? {};
   const todayK = todayKey();
+
+  useEffect(() => {
+    const subscription = DeviceEventEmitter.addListener("girlyvibes:open-secret-diary", () => {
+      setSecretDiaryVisible(true);
+      setSecretTapCount(0);
+    });
+
+    return () => subscription.remove();
+  }, []);
+
+  const handleSecretTap = () => {
+    setSecretTapCount((count) => {
+      const next = count + 1;
+      if (next >= 10) {
+        setSecretDiaryVisible(true);
+        return 0;
+      }
+      return next;
+    });
+  };
 
   return (
     <ScrollView
@@ -2931,9 +3231,11 @@ export default function DiaryScreen() {
         colors={[colors.card, colors.background]}
         style={[styles.header, { paddingTop: topInset + 16 }]}
       >
-        <Text style={[styles.headerTitle, { color: colors.foreground }]}>
-          {t.diary.screenTitle}
-        </Text>
+        <Pressable onPress={handleSecretTap}>
+          <Text style={[styles.headerTitle, { color: colors.foreground }]}>
+            {t.diary.screenTitle}
+          </Text>
+        </Pressable>
         <Text style={[styles.headerSub, { color: colors.mutedForeground }]}>
           {t.diary.screenSubtitle}
         </Text>
@@ -2956,6 +3258,11 @@ export default function DiaryScreen() {
       <NotesSection
         requestedNoteDate={requestedNoteDate}
         onRequestedNoteDateHandled={() => setRequestedNoteDate(null)}
+      />
+
+      <SecretDiaryModal
+        visible={secretDiaryVisible}
+        onClose={() => setSecretDiaryVisible(false)}
       />
 
       {Object.keys(entries).length === 0 && !entries[todayK] && (

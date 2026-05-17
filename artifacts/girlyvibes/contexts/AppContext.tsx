@@ -4,15 +4,19 @@ import React, {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
 } from "react";
+import { Alert } from "react-native";
 
 import { ROUTINE_TEMPLATES, type RoutineTemplate } from "@/data/routines";
 import { useAuth } from "@/contexts/AuthContext";
 import { 
   syncProfileToCloud, 
   syncNoteToCloud, 
+  syncSecretNoteToCloud,
   deleteNoteFromCloud, 
+  deleteSecretNoteFromCloud,
   syncEntryToCloud, 
   deleteEntryFromCloud, 
   syncRoutineToCloud, 
@@ -104,6 +108,9 @@ export interface AppData {
   visionBoardMode: VisionBoardMode;
   diaryEntries: { [dateKey: string]: DiaryEntry };
   diaryNotes: DiaryNote[];
+  secretDiaryPin: string | null;
+  secretDiaryEnabled: boolean;
+  secretDiaryNotes: DiaryNote[];
   customRoutines: RoutineTemplate[];
   lastRoutineResetDate?: string;
 }
@@ -116,6 +123,11 @@ interface AppContextType {
   saveNote: (note: DiaryNote) => Promise<void>;
   deleteNote: (noteId: string) => Promise<void>;
   updateNote: (noteId: string, text: string, color: string, richContent?: RichBlock[], title?: string) => Promise<void>;
+  setSecretDiaryPin: (pin: string) => Promise<void>;
+  clearSecretDiaryPin: () => Promise<void>;
+  saveSecretNote: (note: DiaryNote) => Promise<void>;
+  deleteSecretNote: (noteId: string) => Promise<void>;
+  updateSecretNote: (noteId: string, text: string, color: string, richContent?: RichBlock[], title?: string) => Promise<void>;
   saveUserRoutine: (routine: RoutineTemplate) => Promise<void>;
   deleteUserRoutine: (routineId: string) => Promise<void>;
   setFavoriteRoutine: (routineId: string | null) => Promise<void>;
@@ -168,6 +180,9 @@ const DEFAULT_DATA: AppData = {
   visionBoardMode: "square",
   diaryEntries: {},
   diaryNotes: [],
+  secretDiaryPin: null,
+  secretDiaryEnabled: false,
+  secretDiaryNotes: [],
   customRoutines: [],
 };
 
@@ -194,6 +209,9 @@ function normalizeAppData(raw: Partial<AppData> | null | undefined): AppData {
     profilePhotoStoragePath: parsed.profilePhotoStoragePath ?? null,
     diaryEntries: parsed.diaryEntries ?? {},
     diaryNotes: parsed.diaryNotes ?? [],
+    secretDiaryPin: parsed.secretDiaryPin ?? null,
+    secretDiaryEnabled: parsed.secretDiaryEnabled ?? !!parsed.secretDiaryPin,
+    secretDiaryNotes: parsed.secretDiaryNotes ?? [],
     customRoutines: parsed.customRoutines ?? [],
   };
 }
@@ -250,6 +268,9 @@ function mergeCloudData(localData: AppData, cloudData: Partial<AppData> | null) 
     profilePhoto: normalizedCloud.profilePhoto ?? localData.profilePhoto,
     profilePhotoStoragePath: normalizedCloud.profilePhotoStoragePath ?? localData.profilePhotoStoragePath,
     diaryNotes: mergeByNewest(localData.diaryNotes ?? [], normalizedCloud.diaryNotes ?? []),
+    secretDiaryPin: normalizedCloud.secretDiaryPin ?? localData.secretDiaryPin ?? null,
+    secretDiaryEnabled: normalizedCloud.secretDiaryEnabled || localData.secretDiaryEnabled || !!normalizedCloud.secretDiaryPin || !!localData.secretDiaryPin,
+    secretDiaryNotes: mergeByNewest(localData.secretDiaryNotes ?? [], normalizedCloud.secretDiaryNotes ?? []),
     diaryEntries: mergeEntries(localData.diaryEntries ?? {}, normalizedCloud.diaryEntries ?? {}),
     customRoutines: mergeByNewest(
       localData.customRoutines.map((routine) => ({ ...routine, updatedAt: 0 })),
@@ -267,6 +288,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const STORAGE_KEY = `girlyvibes_app_data_${userId}`;
 
   const [data, setData] = useState<AppData>(DEFAULT_DATA);
+  const lastSyncAlertAtRef = useRef(0);
+
+  const showSyncFailure = useCallback((label: string) => {
+    const now = Date.now();
+    if (now - lastSyncAlertAtRef.current < 5000) return;
+    lastSyncAlertAtRef.current = now;
+    Alert.alert(
+      "Database sync failed",
+      `${label} were saved on this device, but could not update the database right now. Check internet/Supabase setup; the app will try again when it syncs.`,
+    );
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -309,6 +341,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (session?.user?.id) {
         syncProfileToCloud(session.user.id, parsedData);
         parsedData.diaryNotes.forEach((note) => syncNoteToCloud(session.user.id, note));
+        parsedData.secretDiaryNotes.forEach((note) => syncSecretNoteToCloud(session.user.id, note));
         Object.values(parsedData.diaryEntries).forEach((entry) =>
           syncEntryToCloud(session.user.id, entry),
         );
@@ -331,9 +364,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (syncedData) {
         setData(syncedData);
         await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(syncedData));
+      } else {
+        showSyncFailure("Changes");
       }
     }
-  }, [STORAGE_KEY, userId]);
+  }, [STORAGE_KEY, showSyncFailure, userId]);
 
   const updateProfile = useCallback(
     async (name: string, photo: string | null) => {
@@ -621,9 +656,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         ...data,
         diaryEntries: { ...data.diaryEntries, [entry.id]: stampedEntry },
       });
-      if (userId !== "local") syncEntryToCloud(userId, stampedEntry);
+      if (userId !== "local") {
+        const ok = await syncEntryToCloud(userId, stampedEntry);
+        if (!ok) showSyncFailure("Diary entry");
+      }
     },
-    [data, save, userId]
+    [data, save, showSyncFailure, userId]
   );
 
   const deleteDiaryEntry = useCallback(
@@ -631,9 +669,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const updated = { ...data.diaryEntries };
       delete updated[dateKey];
       await save({ ...data, diaryEntries: updated });
-      if (userId !== "local") deleteEntryFromCloud(userId, dateKey);
+      if (userId !== "local") {
+        const ok = await deleteEntryFromCloud(userId, dateKey);
+        if (!ok) showSyncFailure("Diary entry deletion");
+      }
     },
-    [data, save, userId]
+    [data, save, showSyncFailure, userId]
   );
 
   const saveNote = useCallback(
@@ -654,10 +695,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           };
           setData(syncedData);
           await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(syncedData));
+        } else {
+          showSyncFailure("Diary note");
         }
       }
     },
-    [STORAGE_KEY, data, save, userId]
+    [STORAGE_KEY, data, save, showSyncFailure, userId]
   );
 
   const deleteNote = useCallback(
@@ -687,10 +730,95 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           };
           setData(syncedData);
           await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(syncedData));
+        } else {
+          showSyncFailure("Diary note");
         }
       }
     },
-    [STORAGE_KEY, data, save, userId]
+    [STORAGE_KEY, data, save, showSyncFailure, userId]
+  );
+
+  const setSecretDiaryPin = useCallback(
+    async (pin: string) => {
+      await save({
+        ...data,
+        secretDiaryPin: pin,
+        secretDiaryEnabled: true,
+      });
+    },
+    [data, save],
+  );
+
+  const clearSecretDiaryPin = useCallback(
+    async () => {
+      await save({
+        ...data,
+        secretDiaryPin: null,
+        secretDiaryEnabled: false,
+      });
+    },
+    [data, save],
+  );
+
+  const saveSecretNote = useCallback(
+    async (note: DiaryNote) => {
+      const stampedNote = { ...note, updatedAt: Date.now() };
+      const existing = data.secretDiaryNotes ?? [];
+      const next = existing.some((n) => n.id === stampedNote.id)
+        ? existing.map((n) => (n.id === stampedNote.id ? stampedNote : n))
+        : [...existing, stampedNote];
+      const nextData = { ...data, secretDiaryNotes: next };
+      await save(nextData);
+      if (userId !== "local") {
+        const syncedNote = await syncSecretNoteToCloud(userId, stampedNote);
+        if (syncedNote) {
+          const syncedData = {
+            ...nextData,
+            secretDiaryNotes: next.map((n) => (n.id === syncedNote.id ? syncedNote : n)),
+          };
+          setData(syncedData);
+          await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(syncedData));
+        } else {
+          showSyncFailure("Private note");
+        }
+      }
+    },
+    [STORAGE_KEY, data, save, showSyncFailure, userId],
+  );
+
+  const deleteSecretNote = useCallback(
+    async (noteId: string) => {
+      const updated = (data.secretDiaryNotes ?? []).filter((n) => n.id !== noteId);
+      await save({ ...data, secretDiaryNotes: updated });
+      if (userId !== "local") deleteSecretNoteFromCloud(userId, noteId);
+    },
+    [data, save, userId],
+  );
+
+  const updateSecretNote = useCallback(
+    async (noteId: string, text: string, color: string, richContent?: RichBlock[], title?: string) => {
+      const updatedNoteInfo = { text, color, title, updatedAt: Date.now(), ...(richContent ? { richContent } : {}) };
+      const updated = (data.secretDiaryNotes ?? []).map((n) =>
+        n.id === noteId ? { ...n, ...updatedNoteInfo } : n
+      );
+      const nextData = { ...data, secretDiaryNotes: updated };
+      await save(nextData);
+      const fullNote = updated.find(n => n.id === noteId);
+      if (userId !== "local" && fullNote) {
+        const syncedNote = await syncSecretNoteToCloud(userId, fullNote);
+        if (syncedNote) {
+          const syncedData = {
+            ...nextData,
+            secretDiaryNotes: updated.map((n) => (n.id === syncedNote.id ? syncedNote : n)),
+          };
+          setData(syncedData);
+          await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(syncedData));
+        } else {
+          showSyncFailure("Private note");
+        }
+      }
+    },
+    [STORAGE_KEY, data, save, showSyncFailure, userId],
   );
 
   const saveUserRoutine = useCallback(
@@ -700,9 +828,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         ? existing.map((item) => (item.id === routine.id ? routine : item))
         : [...existing, routine];
       await save({ ...data, customRoutines: next });
-      if (userId !== "local") syncRoutineToCloud(userId, routine);
+      if (userId !== "local") {
+        const ok = await syncRoutineToCloud(userId, routine);
+        if (!ok) showSyncFailure("Custom routine");
+      }
     },
-    [data, save, userId]
+    [data, save, showSyncFailure, userId]
   );
 
   const deleteUserRoutine = useCallback(
@@ -723,9 +854,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             ? null
             : data.favoriteRoutineId,
       });
-      if (userId !== "local") deleteRoutineFromCloud(userId, routineId);
+      if (userId !== "local") {
+        const ok = await deleteRoutineFromCloud(userId, routineId);
+        if (!ok) showSyncFailure("Custom routine deletion");
+      }
     },
-    [data, save, userId]
+    [data, save, showSyncFailure, userId]
   );
 
   const clearData = useCallback(async () => {
@@ -745,6 +879,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         saveNote,
         deleteNote,
         updateNote,
+        setSecretDiaryPin,
+        clearSecretDiaryPin,
+        saveSecretNote,
+        deleteSecretNote,
+        updateSecretNote,
         saveUserRoutine,
         deleteUserRoutine,
         setFavoriteRoutine,

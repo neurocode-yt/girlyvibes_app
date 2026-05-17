@@ -18,8 +18,10 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useApp } from "@/contexts/AppContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { supabase } from "@/lib/supabase";
 
 export default function SettingsScreen() {
   const colors = useColors();
@@ -27,10 +29,15 @@ export default function SettingsScreen() {
   const router = useRouter();
   const { t, l, isRTL } = useLanguage();
   const { data, updateProfile } = useApp();
+  const { session } = useAuth();
 
   const [name, setName] = useState(data.profileName);
   const [photo, setPhoto] = useState<string | null>(data.profilePhoto);
   const [saving, setSaving] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [savingPassword, setSavingPassword] = useState(false);
+  const isAnonymousUser = session?.user?.is_anonymous === true;
 
   const topInset = Platform.OS === "web" ? 67 : insets.top;
 
@@ -50,11 +57,13 @@ export default function SettingsScreen() {
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [1, 1],
-      quality: 0.8,
+      quality: 0.7,
+      base64: true,
     });
 
     if (!result.canceled && result.assets[0]) {
-      setPhoto(result.assets[0].uri);
+      const asset = result.assets[0];
+      setPhoto(asset.base64 ? `data:${asset.mimeType || 'image/jpeg'};base64,${asset.base64}` : asset.uri);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
   }
@@ -70,6 +79,48 @@ export default function SettingsScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setSaving(false);
     router.back();
+  }
+
+  async function changeAccountPassword() {
+    const password = newPassword.trim();
+    const confirm = confirmPassword.trim();
+
+    if (password.length < 6) {
+      Alert.alert(
+        l("ÙƒÙ„Ù…Ø© Ø§Ù„Ù…Ø±ÙˆØ± Ù‚ØµÙŠØ±Ø©", "Password too short"),
+        l("Ø§Ø³ØªØ®Ø¯Ù…ÙŠ 6 Ø£Ø­Ø±Ù Ø¹Ù„Ù‰ Ø§Ù„Ø£Ù‚Ù„.", "Use at least 6 characters."),
+      );
+      return;
+    }
+
+    if (password !== confirm) {
+      Alert.alert(
+        l("ÙƒÙ„Ù…ØªØ§ Ø§Ù„Ù…Ø±ÙˆØ± ØºÙŠØ± Ù…ØªØ·Ø§Ø¨Ù‚ØªÙŠÙ†", "Passwords do not match"),
+        l("Ø£Ø¹ÙŠØ¯ÙŠ ÙƒØªØ§Ø¨Ø© ÙƒÙ„Ù…Ø© Ø§Ù„Ù…Ø±ÙˆØ± Ù„Ù„ØªØ£ÙƒØ¯.", "Please confirm the same password."),
+      );
+      return;
+    }
+
+    try {
+      setSavingPassword(true);
+      const { error } = await supabase.auth.updateUser({ password });
+      if (error) throw error;
+      setNewPassword("");
+      setConfirmPassword("");
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert(
+        l("ØªÙ… ØªØºÙŠÙŠØ± ÙƒÙ„Ù…Ø© Ø§Ù„Ù…Ø±ÙˆØ±", "Password changed"),
+        l("ØªÙ… ØªØ­Ø¯ÙŠØ« ÙƒÙ„Ù…Ø© Ù…Ø±ÙˆØ± Ø­Ø³Ø§Ø¨Ùƒ.", "Your account password has been updated."),
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      Alert.alert(
+        l("ØªØ¹Ø°Ø± ØªØºÙŠÙŠØ± ÙƒÙ„Ù…Ø© Ø§Ù„Ù…Ø±ÙˆØ±", "Could not change password"),
+        message || l("ØªØ£ÙƒØ¯ÙŠ Ù…Ù† Ø§Ù„Ø§ØªØµØ§Ù„ Ø¨Ø§Ù„Ø¥Ù†ØªØ±Ù†Øª Ø«Ù… Ø­Ø§ÙˆÙ„ÙŠ Ù…Ø±Ø© Ø£Ø®Ø±Ù‰.", "Check your internet connection and try again."),
+      );
+    } finally {
+      setSavingPassword(false);
+    }
   }
 
   return (
@@ -154,6 +205,59 @@ export default function SettingsScreen() {
           </View>
         </View>
 
+        {!isAnonymousUser && (
+          <View style={styles.securityCard}>
+            <View style={styles.securityHeader}>
+              <MaterialCommunityIcons name="lock-reset" size={22} color={colors.primary} />
+              <Text style={[styles.securityTitle, { color: colors.foreground }]}>
+                {l("ØªØºÙŠÙŠØ± ÙƒÙ„Ù…Ø© Ù…Ø±ÙˆØ± Ø§Ù„Ø­Ø³Ø§Ø¨", "Change account password")}
+              </Text>
+            </View>
+            <Text style={[styles.securityHint, { color: colors.mutedForeground }]}>
+              {l(
+                "ÙŠØ­ØªØ§Ø¬ ØªØºÙŠÙŠØ± ÙƒÙ„Ù…Ø© Ù…Ø±ÙˆØ± Ø§Ù„Ø­Ø³Ø§Ø¨ Ø¥Ù„Ù‰ Ø§Ù„Ø¥Ù†ØªØ±Ù†Øª Ù„Ø£Ù†Ù‡ Ø¢Ù…Ù† ÙˆÙ…Ø±ØªØ¨Ø· Ø¨Ø®Ø§Ø¯Ù… Ø§Ù„Ø¯Ø®ÙˆÙ„.",
+                "Account password changes require internet because they are secured by the login server."
+              )}
+            </Text>
+            <View style={[styles.inputWrapper, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <MaterialCommunityIcons name="lock-outline" size={20} color={colors.mutedForeground} />
+              <TextInput
+                style={[styles.input, { color: colors.foreground, textAlign: isRTL ? "right" : "left" }]}
+                value={newPassword}
+                onChangeText={setNewPassword}
+                placeholder={l("ÙƒÙ„Ù…Ø© Ù…Ø±ÙˆØ± Ø¬Ø¯ÙŠØ¯Ø©", "New password")}
+                placeholderTextColor={colors.mutedForeground}
+                secureTextEntry
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+            </View>
+            <View style={[styles.inputWrapper, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <MaterialCommunityIcons name="lock-check-outline" size={20} color={colors.mutedForeground} />
+              <TextInput
+                style={[styles.input, { color: colors.foreground, textAlign: isRTL ? "right" : "left" }]}
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                placeholder={l("ØªØ£ÙƒÙŠØ¯ ÙƒÙ„Ù…Ø© Ø§Ù„Ù…Ø±ÙˆØ±", "Confirm password")}
+                placeholderTextColor={colors.mutedForeground}
+                secureTextEntry
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+            </View>
+            <Pressable
+              style={[styles.passwordBtn, { backgroundColor: savingPassword ? colors.mutedForeground : colors.foreground }]}
+              onPress={changeAccountPassword}
+              disabled={savingPassword}
+            >
+              <MaterialCommunityIcons name="shield-check-outline" size={18} color="#fff" />
+              <Text style={styles.passwordBtnText}>
+                {savingPassword ? l("Ø¬Ø§Ø±ÙŠ Ø§Ù„ØªØ­Ø¯ÙŠØ«...", "Updating...") : l("ØªØºÙŠÙŠØ± ÙƒÙ„Ù…Ø© Ø§Ù„Ù…Ø±ÙˆØ±", "Change password")}
+              </Text>
+            </Pressable>
+          </View>
+        )}
+
         <Pressable
           style={[
             styles.saveBtn,
@@ -231,6 +335,24 @@ const styles = StyleSheet.create({
   field: {
     gap: 8,
   },
+  securityCard: {
+    gap: 12,
+  },
+  securityHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 8,
+  },
+  securityTitle: {
+    flex: 1,
+    fontFamily: "Inter_700Bold",
+    fontSize: 16,
+  },
+  securityHint: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
+    lineHeight: 18,
+  },
   label: {
     fontSize: 15,
     fontFamily: "Inter_600SemiBold",
@@ -263,5 +385,18 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontFamily: "Inter_700Bold",
     fontSize: 16,
+  },
+  passwordBtn: {
+    alignItems: "center",
+    borderRadius: 16,
+    flexDirection: "row",
+    gap: 8,
+    justifyContent: "center",
+    padding: 14,
+  },
+  passwordBtnText: {
+    color: "#fff",
+    fontFamily: "Inter_700Bold",
+    fontSize: 14,
   },
 });

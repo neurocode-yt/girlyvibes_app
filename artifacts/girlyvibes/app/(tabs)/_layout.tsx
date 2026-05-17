@@ -2,6 +2,7 @@ import { Tabs } from "expo-router";
 import React, { useEffect, useRef } from "react";
 import {
   Animated,
+  DeviceEventEmitter,
   Platform,
   Pressable,
   StyleSheet,
@@ -229,9 +230,23 @@ export default function TabLayout() {
   const insets = useSafeAreaInsets();
   const { t } = useLanguage();
   const isWeb = Platform.OS === "web";
+  const secretDiaryTapCount = useRef(0);
 
   const tabBarButton = (props: any) => <AnimatedTabButton {...props} />;
-  const centerTabBarButton = (props: any) => <AnimatedTabButton {...props} center />;
+  const centerTabBarButton = (props: any) => (
+    <AnimatedTabButton
+      {...props}
+      center
+      onPress={(event: any) => {
+        secretDiaryTapCount.current += 1;
+        if (secretDiaryTapCount.current >= 10) {
+          secretDiaryTapCount.current = 0;
+          DeviceEventEmitter.emit("girlyvibes:open-secret-diary");
+        }
+        props.onPress?.(event);
+      }}
+    />
+  );
 
   return (
     <Tabs

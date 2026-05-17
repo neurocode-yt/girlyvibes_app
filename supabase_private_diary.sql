@@ -1,4 +1,8 @@
--- Add secret/private diary note tables without resetting existing data.
+-- Add secret/private diary fields and note tables without resetting existing data.
+alter table public.profiles
+  add column if not exists private_diary_pin text,
+  add column if not exists private_diary_enabled boolean default false not null;
+
 create table if not exists public.private_diary_notes (
   id text not null,
   user_id uuid references public.profiles(id) on delete cascade not null,
